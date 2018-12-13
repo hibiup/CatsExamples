@@ -76,6 +76,7 @@ object PizzaHub {
             |      toppings = ${p.toppings}""".stripMargin
     }
 
+
     /**
       * 4) 于是我们可以直接(实际上是通过 syntax interface )对 Pizza 使用上面这个隐式 instance 了.　
       *
