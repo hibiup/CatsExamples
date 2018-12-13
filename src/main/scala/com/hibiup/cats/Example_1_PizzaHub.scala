@@ -36,8 +36,8 @@ object PizzaHub {
     /**
       * 2）interface：
       *
-      * interface 是暴露给用户的使用界面,也就是将 API 绑定到 Pizza 上,这里使用了 Syntax 方式. 我们看到
-      * import cats.syntax.show._ 引进了 Show 的 syntax interface:
+      * interface 是实现类型与方法预绑定的地方, 这里使用了 Syntax 方式. 我们看到 import cats.syntax.show._ 引进了 Show 的
+      * syntax interface:
       *
         trait ShowSyntax extends Show.ToShowOps {
             implicit final def showInterpolator(sc: StringContext): Show.ShowInterpolator = Show.ShowInterpolator(sc)
@@ -50,7 +50,7 @@ object PizzaHub {
                 val typeClassInstance = tc
             }
         }
-      * ToShowOps.toShow 是一个隐式转换, 他为 Pizza 动态绑定隐式参数 Show instance
+      * ToShowOps.toShow 是一个隐式转换, 他为 Pizza 动态绑定隐式抽象类型 Show[A]
       *
       * */
     import cats.syntax.show._  //the interface syntax
@@ -58,9 +58,8 @@ object PizzaHub {
 
     /** 3）instance：
       *
-      * 第二步 ToShowOps.toShow 隐式绑定的对象是我们要实现的 typeclass 具体的工作 instance. 我们通过 object Show.show 来生成.
-      *
-      * show 方法接受一个函数参数，这个参数含有是对具体类型的实现，通过这个工厂方法生成 Show 的具体的 instance.
+      * 以上步骤中 ToShowOps.toShow 隐式绑定的最终对象是我们要实现的 typeclass 具体的工作 instance. 它的绑定动作通过 object Show.show
+      * 来完成. show 方法接受一个函数参数，这个参数含有对具体类型的实现，通过这个工厂方法生成 Show 的具体的 instance.
       *
         object Show {
             def show[A](f: A => String): Show[A] = new Show[A] {
