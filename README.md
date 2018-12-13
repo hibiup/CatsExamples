@@ -12,18 +12,24 @@ trait JsonWriter[A]{
   def write(value:A):Json
 }
 ~~~
+
 一般来讲这个类型类不包含实现代码，更像 Java 中的interface。但是Cats的类型类中对 interface 这个单词有其它定义，它往往指的是
 “暴露给用户去实现的方法".
 
 ### 类型的实例（instance）
 
 typeclass 的具体实例提供了面向具体数据类型的特定方法，它继承并实例化了抽象的 typeclass。并且，一一般会给它们贴上隐式 implicit 关
-键字，比如：
+键字：
+
+例1）
 ~~~
 implicit val stringJsonWriter:JsonWriter[String]= new JsonWriter[String] {
     override def write(value: String) = JsString(value)
 }
+~~~
 
+例2）
+~~~
 implicit val personJsonWriter:JsonWriter[Person]= new JsonWriter[Person] {
     override def write(value: Person) = JsObject(Map(
         "name"->JsString(value.name),
@@ -78,3 +84,6 @@ val r1=Person("hang","email").toJson   <-- 使用 interface
 
 Cats　就在这个基础上实现将类型类（typeclass）、具体类型实例(instance)以及接口(interface)模块化．
 
+# 参考：
+https://nrinaudo.github.io/2015/12/13/tcgu-part-5.html
+https://blog.csdn.net/hangscer/article/details/78375127
