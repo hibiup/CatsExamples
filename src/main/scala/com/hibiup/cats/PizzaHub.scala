@@ -58,7 +58,9 @@ object PizzaHub {
 
     /** 3）instance：
       *
-      * 第二步 ToShowOps.toShow 隐式绑定的对象是我们要实现的 typeclass 具体的工作 instance. 我们通过 object Show.show 来生成:
+      * 第二步 ToShowOps.toShow 隐式绑定的对象是我们要实现的 typeclass 具体的工作 instance. 我们通过 object Show.show 来生成.
+      *
+      * show 方法接受一个函数参数，这个参数含有是对具体类型的实现，通过这个工厂方法生成 Show 的具体的 instance.
       *
         object Show {
             def show[A](f: A => String): Show[A] = new Show[A] {
@@ -75,7 +77,9 @@ object PizzaHub {
     }
 
     /**
-      * 4) 于是我们可以直接(实际上是通过 syntax interface )对 Pizza 使用上面这个隐式 instance 了.
+      * 4) 于是我们可以直接(实际上是通过 syntax interface )对 Pizza 使用上面这个隐式 instance 了.　
+      *
+      * 注意：这个 show 不是工厂方法 Show.show，而是它传入的函数参数 p．
       * */
     val p = pizza.show
 }
