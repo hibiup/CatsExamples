@@ -61,7 +61,7 @@ object Example_2_simulacrum {
       * idea。这一步不是必须的，不定义除了影响误判外，不影响编译或调试。真正影响 macros 发挥作用的是 build.sbt 中的配置。（参见上面）
       * */
     //object CanTruthy {
-        /*def fromTruthy[A](f: A => Boolean): CanTruthy[A] = new CanTruthy[A] {
+        /*def apply[A](f: A => Boolean): CanTruthy[A] = new CanTruthy[A] {
             def truthy(a: A): Boolean = f(a)
         }*/
     //}
@@ -74,13 +74,13 @@ object Client {
     /**
       * 2) import 进 @imulacrum.typeclass macro 自动生成的代码和 object CanTruthy 工厂方法
       * */
-    import com.hibiup.cats.Example_2_simulacrum.CanTruthy.ops._   // 如果没有 1-2)　这里会出现误判，认为 package 不存在，可以忽略
+    import com.hibiup.cats.Example_2_simulacrum.CanTruthy.ops._   // 如果没有 1-2) 这里会出现误判，认为 package 不存在，可以忽略
     import com.hibiup.cats.Example_2_simulacrum.CanTruthy
 
     /**
       * 2）提供应用时所需的具体实现方法。
       *
-      * fromTruthy 这个方法是 @imulacrum.typeclass 在编译时动态生成的工厂方法。
+      * apply 这个方法是 @imulacrum.typeclass 在编译时动态生成的工厂方法，参数 truthy(a: A): Boolean 函数实体。
       * */
     implicit val intCanTruthy: CanTruthy[Int] = CanTruthy.apply[Int]({
         case 0 => false
@@ -90,5 +90,5 @@ object Client {
     /**
       * 2) 第三步 import 进来的自动生成的隐式转换将对象和方法绑定在一起．
       * */
-    val r = 10.truthy    // 如果没有 1-2)　这里会出现误判，认为方法不存在，可以忽略
+    val r = 10.truthy    // 如果没有 1-2) 这里会出现误判，认为方法不存在，可以忽略
 }
