@@ -84,7 +84,7 @@ object Client {
 
     /**
       * 3) import 进@imulacrum.typeclass macro 自动生成的隐式转换，将对象和方法绑定在一起．如果没有 1-2) 这里会出现误判，
-      * 认为 package　和方法不存在，但是错误可以忽略.
+      * 认为 package　和 truthy 方法不存在，但是错误可以忽略.
       * */
     import com.hibiup.cats.Example_2_simulacrum.CanTruthy.ops._
     val r = 10.truthy
