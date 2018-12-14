@@ -57,8 +57,8 @@ object Example_2_simulacrum {
     }
 
     /**
-      * 1-2) 以下这一步不是必须的，只是因为 idea 对 macros 的不支持，导致在 IDE 中出现误判，可以通过显式声明一个空的 object 来
-      * 欺骗 idea。这一步不是必须的，不定义除了影响误判外，不影响编译或调试。
+      * 1-2) 以下这一步不是必须的，只是因为 idea 对 macros 的不支持，导致在 IDE 中出现误判，可以通过显式声明一个空的 object 来欺骗
+      * idea。这一步不是必须的，不定义除了影响误判外，不影响编译或调试。真正影响 macros 发挥作用的是 build.sbt 中的配置。（参见上面）
       * */
     //object CanTruthy {
         /*def fromTruthy[A](f: A => Boolean): CanTruthy[A] = new CanTruthy[A] {
