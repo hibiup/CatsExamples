@@ -85,7 +85,6 @@ object PizzaHub {
 }
 
 
-
 /** 辅助类，用于生成Pizza*/
 object PizzaHubModels {
     sealed trait Topping
