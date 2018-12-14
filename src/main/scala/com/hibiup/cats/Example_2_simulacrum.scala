@@ -72,23 +72,20 @@ object Example_2_simulacrum {
   */
 object Client {
     /**
-      * 2) import 进 @imulacrum.typeclass macro 自动生成的代码和 object CanTruthy 工厂方法
-      * */
-    import com.hibiup.cats.Example_2_simulacrum.CanTruthy.ops._   // 如果没有 1-2) 这里会出现误判，认为 package 不存在，可以忽略
-    import com.hibiup.cats.Example_2_simulacrum.CanTruthy
-
-    /**
-      * 2）提供应用时所需的具体实现方法。
+      * 2) import 进 @imulacrum.typeclass macro 自动生成的 object CanTruthy 工厂方法 apply 来生成 instance，参数是
+      * truthy(a: A): Boolean 函数实体。如果没有 1-2) 这里会出现误判，认为 CanTruthy 不存在，但是错误可以忽略.
       *
-      * apply 这个方法是 @imulacrum.typeclass 在编译时动态生成的工厂方法，参数 truthy(a: A): Boolean 函数实体。
       * */
+    import com.hibiup.cats.Example_2_simulacrum.CanTruthy
     implicit val intCanTruthy: CanTruthy[Int] = CanTruthy.apply[Int]({
         case 0 => false
         case _ => true
     })
 
     /**
-      * 2) 第三步 import 进来的自动生成的隐式转换将对象和方法绑定在一起．
+      * 3) import 进@imulacrum.typeclass macro 自动生成的隐式转换，将对象和方法绑定在一起．如果没有 1-2) 这里会出现误判，
+      * 认为 package　和方法不存在，但是错误可以忽略.
       * */
-    val r = 10.truthy    // 如果没有 1-2) 这里会出现误判，认为方法不存在，可以忽略
+    import com.hibiup.cats.Example_2_simulacrum.CanTruthy.ops._
+    val r = 10.truthy
 }
