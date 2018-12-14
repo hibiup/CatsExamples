@@ -1,5 +1,6 @@
 val catsVersion = "1.0.1"
 val scalaTestVersion = "3.0.5"
+val specs2Version = "4.3.5"
 
 lazy val CatsExamples = (project in file(".")).
         settings(
@@ -9,6 +10,9 @@ lazy val CatsExamples = (project in file(".")).
             scalaVersion := "2.12.7",
             libraryDependencies ++= Seq(
                 "org.scalatest" %% "scalatest" % scalaTestVersion % Test,
+                "org.specs2" %% "specs2-core" % specs2Version % Test,
+                "org.specs2" %% "specs2-scalacheck" % specs2Version % Test,
+                "org.scalacheck" %% "scalacheck" % "1.14.0", Test,
                 "org.typelevel" %% "cats-core" % catsVersion,
                 "org.typelevel" %% "cats-free" % catsVersion,
                 "org.typelevel" %% "cats-mtl-core" % "0.2.1"
