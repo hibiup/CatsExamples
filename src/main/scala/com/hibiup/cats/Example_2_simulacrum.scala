@@ -11,8 +11,10 @@ object Example_2_simulacrum {
       * 1）定义一个 typeclass:
       */
     import simulacrum._
-    /** @imulacrum.typeclass macro 的作用是告诉编译器这是一个 typeclass，它来自 "org.typelevel" %% "cats-mtl-core" % version。
-      * 为此需要在 build.sbt 中加入以下两行编译选项：
+    /**
+      * @imulacrum.typeclass macro [https://github.com/typelevel/cats/blob/master/docs/src/main/tut/faq.md#simulacrum]
+      *  的作用是告诉编译器这是一个 typeclass，它来自 "org.typelevel" %% "cats-mtl-core" % version。
+      *  为此需要在 build.sbt 中加入以下两行编译选项：
       *
       * 　　scalacOptions ++= Seq("-Xplugin-require:macroparadise")
       * 　　addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.0" cross CrossVersion.full)
@@ -70,7 +72,7 @@ object Example_2_simulacrum {
 /**
   * 应用时
   */
-object Client {
+object Example_2_simulacrum_Client {
     /**
       * 2) import 进 @imulacrum.typeclass macro 自动生成的 object CanTruthy 工厂方法 apply 来生成 instance，参数是
       * truthy(a: A): Boolean 函数实体。如果没有 1-2) 这里会出现误判，认为 CanTruthy 不存在，但是错误可以忽略.
