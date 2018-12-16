@@ -89,32 +89,34 @@ object Example_4_Functor_3 {
     /** 2）定义它的 map 函数体 */
         Functor[F].map(fa)(_ => ())
 
-    /** 3) 将 List(Some(1), None, Some(2)) => List(Some(()), None, Some(())) */
-    import cats.instances.list._
-    import cats.instances.option._
-    val listOptionFunctor = Functor[List].compose[Option]
-
     /**
-      * 3-1) 定义一个 type lambda: ({type λ[A] =  List[Option[A]]})#λ, 作用是将类型 Option 作为缺省，只关注类型 A
+      * 3) 将 List(Some(1), None, Some(2)) => List(Some(()), None, Some(()))．
+      *
+      * 3-1) 首先定义一个 type lambda: ({type λ[A] =  List[Option[A]]})#λ, 作用是将类型 Option 作为缺省，只关注类型 A
       **/
     type ListOption[A] = List[Option[A]]
-    /** 3-2) 这是两次连续函数调用，第一级调用是：NeedsFunctor[ListOption, Int](listOption)，传入
-      * List(Some(1), None, Some(2))，然后再结果上直接调用 map(listOptionFunctor) 得到List(Some(()), None, Some(())).
+
+    /** 3-2) 执行两次连续函数调用，第一次调用是：NeedsFunctor[ListOption, Int](listOption)，传入
+      * List(Some(1), None, Some(2))，然后再结果上调用 map(listOptionFunctor)，listOptionFunctor 是一个能够处理 Option 的
+      * compose，而 NeedsFunctor 的作用是将数据映射成函数，得到结果 List(Some(()), None, Some(())).
       *
       * 之所以要以这种方式连续调用，是因为我们要将 listOptionFunctor　作用于　Option[A] 中的 A，而不是整个 Option[A]
       * 也就是说我们要实现　Option(fa(a))，否则就成了 fa(Option(a))．也因此我们才需要定义上面的这个 type lambda．
-      * 根据 type lambda 提取出 A，和它的类型 Int，也就是说在第一级函数调用 “NeedsFunctor[ListOption, Int](listOption)”
-      * 中，参数 ListOption == F[_] == ListOption[Int]，然后结果执行函数调用：map(listOptionFunctor) 时 listOptionFunctor
+      * 根据 type lambda 提取出 A 的类型 Int，也就是说在第一级函数调用 “NeedsFunctor[ListOption, Int](listOption)”
+      * 中，参数 ListOption == F[_] == ListOption[Int]，然后对结果执行函数调用：map(listOptionFunctor) 时 listOptionFunctor
       * 就作用于 Int，而不是 Option[Int] 了.
       * */
+    import cats.instances.list._
+    import cats.instances.option._
+    val listOptionFunctor = Functor[List].compose[Option]
     val mapper = NeedsFunctor[ListOption, Int](listOption)(listOptionFunctor)
 
-    /** 4) 得到 mapper．将 List(Some(1), None, Some(2)) 重新作用于它，此时的 mapper 只需等待容器内的　() 被赋予
+    /** 4) 通过 Nested 得到 mapper．将 List(Some(1), None, Some(2)) 重新作用于它，此时的 mapper 只需等待容器内的 () 被赋予
       * 实际有效的函数体．*/
     import cats.data.Nested
     import cats.syntax.functor._
     val nested: Nested[List, Option, Int] = Nested(listOption)
 
-    /** 5) 赋予函数体，完成计算 */
+    /** 5) 赋予 mapper 内函数的函数体，完成计算 */
     val r = nested.map(_ + 1)
 }
