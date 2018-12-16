@@ -7,6 +7,7 @@ class Example_5_Eq_test extends FlatSpec{
         import com.hibiup.cats.Example_5_Eq._
         compare_int()
         compare_option()
+        compare_list()
         compare_customized_class()
     }
 

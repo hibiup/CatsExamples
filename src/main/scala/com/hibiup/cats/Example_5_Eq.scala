@@ -11,6 +11,7 @@ object Example_5_Eq {
     /** cats.syntax.eq._ 包含了包括 "===" 和 "=!=" 再内的隐式*/
     import cats.syntax.eq._
 
+    /** 比较基本类型 */
     def compare_int(): Unit = {
         /**  首先要引进被比较对象的隐式转换 */
         import cats.instances.int._
@@ -23,6 +24,7 @@ object Example_5_Eq {
         assert(123 === 123)
     }
 
+    /** 比较容器类型 */
     def compare_option(): Unit = {
         import cats.instances.int._ // for Int
         import cats.instances.option._ // for Option
@@ -44,8 +46,18 @@ object Example_5_Eq {
         assert(1.some =!= none[Int])
     }
 
+    def compare_list(): Unit = {
+        import cats.instances.list._
+        import cats.instances.int._
+        import cats.instances.option._
+
+        assert(List(1,2) === List(1, 2))
+        assert(List(Option(1), None) === List(Some(1), None))
+        assert(List(List(Option(1), None), List(Option(2), None)) =!= List(List(Some(1), None), List(Some(2))))
+    }
+
+    /** 比较一个自定义的类型，比如： */
     def compare_customized_class(): Unit = {
-        /** 比较一个自定义的类型，比如： */
         final case class Cat(name: String, age: Int, color: String)
 
         /** 需要自己实现 case class 的比较算法，然后将之声明为隐式：*/
