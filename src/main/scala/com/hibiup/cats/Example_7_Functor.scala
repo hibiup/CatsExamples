@@ -55,9 +55,9 @@ object Example_7_Functor_map {
         import cats.instances.list._
 
         /** 3）绑定 map 函数的处理实体。 */
-        val functor = Functor[List].map(listOption) { _ + 1 } // List(2, 3, 4)
+        val res = Functor[List].map(listOption) { _ + 1 } // List(2, 3, 4)
 
-        assert( List(2, 3, 4) === functor)
+        assert( List(2, 3, 4) === res)
     }
 
     /** 也可以用 syntax 方式以隐式类型转换的方式为对象加上 map　*/
@@ -69,10 +69,14 @@ object Example_7_Functor_map {
         /** 引进 map syntax */
         import cats.syntax.functor._      // 引进 map 隐式方法
         import cats.instances.function._  // 因为我们希望 map 应用于函数，因此引进 function 隐式方法
-        val res = (i2d map d2s)(3)        // map 隐式方法通过 macros 生效，因此可能引起 IDE 误报
+        val result1 = (i2d map d2s)(3)        // map 隐式方法通过 macros 生效，因此可能引起 IDE 误报
 
         import cats.instances.string._
-        assert("6.0" === res)
+        assert("6.0" === result1)
+        assert("6.0" === d2s(i2d(3)))         // 等价的使用方式
+
+        val result2 = (i2d andThen d2s)(30)   // 也可以用 andThen
+        assert("60.0" === result2)
     }
 }
 
@@ -80,21 +84,27 @@ object Example_7_Functor_map {
   * 二）处理一个嵌套类型:　F[G[_]]
   * */
 object Example_7_Functor_2 {
-    /** 1）引进 Functor typeclass */
-    import cats.Functor
+    def functor_for_container() {
+        /** 1）引进 Functor typeclass */
+        import cats.Functor
 
-    /**
-      * 2）定义要处理的数据。注意 compose 对参数类型的需求是 F[G[_]]，也就是说必须是嵌套类型，不可以是 F[Int]。
-      * 详细参考上面的说明
-      * */
-    val listOption = List(Some(1), None, Some(2))
+        /**
+          * 2）定义要处理的数据。注意 compose 对参数类型的需求是 F[G[_]]，也就是说必须是嵌套类型，不可以是 F[Int]。
+          * 详细参考上面的说明
+          * */
+        val listOption = List(Some(1), None, Some(2))
 
-    /** 3）必须 import 以下数据类型对应包中的隐式方法。*/
-    import cats.instances.list._
-    import cats.instances.option._
+        /** 3）必须 import 以下数据类型对应包中的隐式方法。*/
+        import cats.instances.list._
+        import cats.instances.option._
 
-    /** 4）通过 compose 绑定 map 函数的处理实体。*/
-    val functor = Functor[List].compose[Option].map(listOption) { _ + 1 }  // List(Some(2), None, Some(3))
+        /** 4）通过 compose 绑定 map 函数的处理实体。*/
+        val res = Functor[List].compose[Option].map(listOption) { _ + 1 }  // List(Some(2), None, Some(3))
+
+        import cats.instances.option._
+        import cats.instances.int._
+        assert(List(Some(2), None, Some(3)) === res)
+    }
 }
 
 /**

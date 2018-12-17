@@ -11,7 +11,7 @@ class Example_7_Functor_test extends FlatSpec{
 
     "Functor compose test" should "" in {
         import com.hibiup.cats.Example_7_Functor_2._
-        println(functor)
+        functor_for_container()
     }
 
     "Functor in Functor test" should "" in {
