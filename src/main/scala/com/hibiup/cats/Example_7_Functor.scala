@@ -62,21 +62,26 @@ object Example_7_Functor_map {
 
     /** 也可以用 syntax 方式以隐式类型转换的方式为对象加上 map　*/
     def functor_syntax() {
-        /** 定义转换函数 */
+        /** 预定义函数 */
         val i2d: Int => Double = (x: Int) => (x *2).toDouble
-        val d2s: Double => String = (y: Double) => y.toString
+        val d2s: Double => String = (y: Double) => y.toString + "!"
 
         /** 引进 map syntax */
-        import cats.syntax.functor._      // 引进 map 隐式方法
-        import cats.instances.function._  // 因为我们希望 map 应用于函数，因此引进 function 隐式方法
+        import cats.syntax.functor._          // 引进 map 隐式方法
+        import cats.instances.function._      // 因为我们希望 map 应用于函数，因此引进 function 隐式方法
         val result1 = (i2d map d2s)(3)        // map 隐式方法通过 macros 生效，因此可能引起 IDE 误报
 
         import cats.instances.string._
-        assert("6.0" === result1)
-        assert("6.0" === d2s(i2d(3)))         // 等价的使用方式
+        assert("6.0!" === result1)
+        assert("6.0!" === d2s(i2d(3)))         // 等价的使用方式
 
-        val result2 = (i2d andThen d2s)(30)   // 也可以用 andThen
-        assert("60.0" === result2)
+        /** 也可以用 andThen　等价于 map */
+        val result2 = (i2d andThen d2s)(30)
+        assert("60.0!" === result2)
+
+        /** 可以直接将 lambda 传递给 map */
+        val func = ((x:Int) => (x*2).toDouble).map( x => x.toString + "!")
+        assert("6.0!" === func(3))
     }
 }
 
