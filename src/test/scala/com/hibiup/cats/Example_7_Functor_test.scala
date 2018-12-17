@@ -4,8 +4,9 @@ import org.scalatest.FlatSpec
 
 class Example_7_Functor_test extends FlatSpec{
     "Functor map test" should "" in {
-        import com.hibiup.cats.Example_7_Functor_1._
-        println(functor)
+        import com.hibiup.cats.Example_7_Functor_map._
+        functor_map()
+        functor_syntax()
     }
 
     "Functor compose test" should "" in {

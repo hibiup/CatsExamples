@@ -1,5 +1,7 @@
 package com.hibiup.cats
 
+import cats.syntax.eq._
+
 /**
   * Functor syntax
   *
@@ -34,22 +36,44 @@ package com.hibiup.cats
   * */
 
 /**
-  * 一）首先以一个简单的map 为例：
+  * 一）首先以一个简单的 map 为例：
   * */
-object Example_7_Functor_1 {
-    /** 1）不需要自己定义Functor了，可以直接引进 */
-    import cats.Functor
+object Example_7_Functor_map {
+    /** 直接使用 Functor */
+    def functor_map() {
+        import cats.instances.int._
 
-    /**
-      * 2）定义要处理的数据。
-      * */
-    val listOption = List(1, 2, 3)
+        /**
+          * 要处理的数据。
+          **/
+        val listOption = List(1, 2, 3)
 
-    /** 3）必须 import 数据类型对应包中的隐式方法。*/
-    import cats.instances.list._
+        /** 1）不需要自己定义Functor，直接引进 */
+        import cats.Functor
 
-    /** 4）绑定 map 函数的处理实体。*/
-    val functor = Functor[List].map(listOption) { _ + 1 }  // List(2, 3, 4)
+        /** 2）引进数据类型对应包中的隐式方法。 */
+        import cats.instances.list._
+
+        /** 3）绑定 map 函数的处理实体。 */
+        val functor = Functor[List].map(listOption) { _ + 1 } // List(2, 3, 4)
+
+        assert( List(2, 3, 4) === functor)
+    }
+
+    /** 也可以用 syntax 方式以隐式类型转换的方式为对象加上 map　*/
+    def functor_syntax() {
+        /** 定义转换函数 */
+        val i2d: Int => Double = (x: Int) => (x *2).toDouble
+        val d2s: Double => String = (y: Double) => y.toString
+
+        /** 引进 map syntax */
+        import cats.syntax.functor._      // 引进 map 隐式方法
+        import cats.instances.function._  // 因为我们希望 map 应用于函数，因此引进 function 隐式方法
+        val res = (i2d map d2s)(3)        // map 隐式方法通过 macros 生效，因此可能引起 IDE 误报
+
+        import cats.instances.string._
+        assert("6.0" === res)
+    }
 }
 
 /**

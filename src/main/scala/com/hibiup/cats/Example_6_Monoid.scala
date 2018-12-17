@@ -36,7 +36,6 @@ object Example_6_Monoid_1 {
 object Example_6_Cats_Monoid {
     import cats.syntax.eq._
 
-
     def string_monoid() {
         /** 1）引进 Cats 缺省实现的 string monoid */
         import cats.instances.string._
