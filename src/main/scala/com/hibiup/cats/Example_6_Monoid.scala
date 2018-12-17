@@ -3,7 +3,7 @@ package com.hibiup.cats
 /**
   * Monoid 的定义：
   * */
-object Example_7_Monoid_1 {
+object Example_6_Monoid_1 {
     /**
       * 半群：满足结合率和交换率
       * */
@@ -33,7 +33,7 @@ object Example_7_Monoid_1 {
 /**
   * Cats 提供了缺省的 Monoid typeclass, 预定义了以上方法, 通过直接实现相应的函数接口就可以获得 Monoid
   * */
-object Example_7_Cats_Monoid {
+object Example_6_Cats_Monoid {
     import cats.syntax.eq._
 
 

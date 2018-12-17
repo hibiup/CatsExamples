@@ -36,7 +36,7 @@ package com.hibiup.cats
 /**
   * 一）首先以一个简单的map 为例：
   * */
-object Example_4_Functor_1 {
+object Example_7_Functor_1 {
     /** 1）不需要自己定义Functor了，可以直接引进 */
     import cats.Functor
 
@@ -55,7 +55,7 @@ object Example_4_Functor_1 {
 /**
   * 二）处理一个嵌套类型:　F[G[_]]
   * */
-object Example_4_Functor_2 {
+object Example_7_Functor_2 {
     /** 1）引进 Functor typeclass */
     import cats.Functor
 
@@ -77,7 +77,7 @@ object Example_4_Functor_2 {
   * 三）更复杂的情况是假设 Functor 本身也希望进行嵌套，也就是说 Functor 的类型参数将变成描述自己的 F[_]，而不是
   * List 之类的具体的高阶类型．
   * */
-object Example_4_Functor_3 {
+object Example_7_Functor_3 {
     import cats.Functor
 
     /** 设计一个 Functor, 这个 Functor 是我们将要嵌套传递的. */

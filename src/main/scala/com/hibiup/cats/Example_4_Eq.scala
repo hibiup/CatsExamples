@@ -5,7 +5,7 @@ package com.hibiup.cats
   * 　　List(1, 2, 3).map(Option(_)).filter(item => item == 1)
   *　Scala 并不能发现实际上是在做 Option(1) == 1 比较。为此 Cats 提供了 Eq 来支持类型安全的比较运算。
   * */
-object Example_5_Eq {
+object Example_4_Eq {
     /** cats.Eq 是类型安全的比较类 */
     import cats.Eq
     /** cats.syntax.eq._ 包含了包括 "===" 和 "=!=" 再内的隐式*/

@@ -3,7 +3,7 @@ package com.hibiup.cats
 /**
   * 协变：容器的继承顺序和容器内的类型的继承顺序一致
   **/
-object Example_6_Covariance {
+object Example_5_Covariance {
     sealed trait Shape
     case class Circle(radius: Double) extends Shape
 
@@ -23,7 +23,7 @@ object Example_6_Covariance {
 /**
   * 逆变：容器的继承关系和容器内的类型的继承关系相反
   **/
-object Example_6_Contravariance {
+object Example_5_Contravariance {
     sealed trait Shape
     case class Circle(radius: Double) extends Shape
 
@@ -43,7 +43,7 @@ object Example_6_Contravariance {
 /**
   * 不变：容器之间没有继承关系
   **/
-object Example_6_Invariance {
+object Example_5_Invariance {
     sealed trait Shape
     case class Circle(radius: Double) extends Shape
 
