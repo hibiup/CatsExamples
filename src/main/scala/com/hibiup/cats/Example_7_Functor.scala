@@ -3,9 +3,29 @@ package com.hibiup.cats
 import cats.syntax.eq._
 
 /**
+  * 在 Scala 里的 type 必须对应一个具体的类型值，比如：
+  *
+  *    Int          // type
+  *    List[Int]    // type
+  *
+  * 而 List 就被称为 Type Constructor，它接受类型参数，产生出 type
+  *
+  *    List     // type constructor, 不是 type.
+  *
+  * kind 则是对 type constructor 的描述。例如：一个 Type constructor 描述的是 A -> B 的关系，那么它的 kind 就是 A -> B，也
+  * 就是说 kind 是 type constructor 的 type，而实现这个关系的类本身是 value，比如 List 是一个 value, 不是 type. 所以 kind
+  * 也被称为 type of type。三者之间的关系如下：
+  *
+  *    type constructor[type:kind]: kind -> value: type
+  *
+  * type constructor 是一个高级语言特性，我们需要在 build.sbt 中使用 scalacOptions += "-language:higherKinds" 来告诉编译器
+  * 以免警告，或在代码中 import scala.language.higherKinds 。
+  */
+
+/**
   * Functor syntax
   *
-  * Cats 缺省提供了一些预定义的　typeclass，比如　Functor, Applicative 和 Monad. 以 Functor 为例，它的定义如下：
+  * Cats 缺省提供了一些预定义的 typeclass，比如　Functor, Applicative 和 Monad. 以 Functor 为例，它的定义如下：
   *
       @typeclass trait Functor[F[_]] extends Invariant[F] { self =>
         def map[A, B](fa: F[A])(f: A => B): F[B]
@@ -32,7 +52,8 @@ import cats.syntax.eq._
           }
       }
   *
-  * 接下来以进一步说明：
+  * Functor 允许我们为一个单类型参数的 type constructor，例如 List, Option, Future，或自定义的 MyFunc 指定类型参数
+  * 来获得它的实例。接下来以进一步说明：
   * */
 
 /**
