@@ -7,7 +7,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 
 /** Future 其实就是一个 Functor，它以将异步任务存入队列，并逐个完成计算．它的 map 方法将每个任务的前一次计算的结果应用于后续的计算．*/
-object Example_8_Future_Functor {
+object Example_8_Functor_Future {
     def future_map() = {
         import cats.instances.string._
 

@@ -177,6 +177,11 @@ object Example_7_Functor_3 {
     import cats.syntax.functor._
     val nested: Nested[List, Option, Int] = Nested(listOption)
 
-    /** 5) 赋予 mapper 内函数的函数体，完成计算 */
+    /** 5) 赋予 mapper 内函数的函数体，完成计算.
+      *
+      * 必须在编译时加上 scalacOptions += "-Ypartial-unification" 参数. "partial-unification" 源于Scala编译器中
+      * 一个臭名昭著的 BUG, 详见 p-70 的介绍。
+      *
+      * */
     val r = nested.map(_ + 1)
 }
