@@ -97,9 +97,8 @@ object Example_10_Monad {
     }
 
     /**
-      * 以 Option Monad 为例：
-      *
-      * （Option 实现了 may or may not 运算．详细解释参考: https://github.com/hibiup/FreeMonad）
+      * 上面演示了通过 Monad trait 来获得 Option．接下来单独讲解一下 Option，Option 实现了 may or may not 运算．
+      * 详细解释参考: https://github.com/hibiup/FreeMonad
       *
       * 输入 string number，实现除法运算．
       * */
@@ -120,10 +119,8 @@ object Example_10_Monad {
         stringDivideBy("4", "2").foreach(result => println(result))
     }
 
-
     /**
-      * 上例的 Future 版本， 尝试用 OptionT 来取得
-      * OptionT[F[_], A]
+      * 尝试在 Future 中通过 OptionT[F[_], A] 使用 Option
       * */
     def future_monad() {
         import scala.concurrent.ExecutionContext.global
