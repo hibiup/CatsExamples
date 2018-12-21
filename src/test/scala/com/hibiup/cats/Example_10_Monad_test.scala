@@ -8,6 +8,7 @@ class Example_10_Monad_test extends FlatSpec{
     "Cats Monad definition" should "" in {
         cats_monad()
         cats_monad_syntax()
+        monad_id()
     }
 
     "Option Monad" should "" in {
