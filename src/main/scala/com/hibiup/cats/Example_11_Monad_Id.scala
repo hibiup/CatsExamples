@@ -5,7 +5,17 @@ object Example_11_Monad_Identity {
     /**
       * 通常，Monad 运算都是基于容器的，因此如果我们一般数据就会导致失败，Monad Identity 则允许我们隐式将一般数据转换成 Monad
       *
-      * Identity:  幺元，任何数据与幺元结合都返回自身。
+      * Identity:  幺元，任何数据与幺元结合都返回自身。 Cats 的幺元非常“妖”，它的定义如下：
+      *
+          def pure[A](value: A): Id[A] = value
+      *
+      * 可以看到，Id[A] 其实就是 A。 将数据类型重新定义成 Id[_] 的背后并没有什么魔术，它只是告诉 map 和 flatMap 是否需要对数据做
+      * 解包或打包。当 map 或 flatMap 接收到一个 Id[_] 类型的数据时，它的处理等同如下：
+      *
+          def flatMap[A, B](initial: Id[A])(func: A => Id[B]): Id[B] = func(initial)
+      *
+      * flatMap 不再对数据拆包，直接将它交给了处理函数。map也是一样 (p-252)
+      *
       * */
     def monad_id() = {
         import scala.language.higherKinds
