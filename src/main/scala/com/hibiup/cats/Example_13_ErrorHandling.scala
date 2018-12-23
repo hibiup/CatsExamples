@@ -47,4 +47,66 @@ object Example_13_ErrorHandling {
             .bimap(recover, _ * 2)  /** 正确输出 Right(6) */
             .map(x => assert(x === 6))
     }
+
+    /**
+      * Cats 设计了一个 MonadError Monad可以作为 Error handler。它有两个最重要的方法：
+      *
+      *  * handleError 用于接管错误处理
+      *  * raiseError 用于抛出错误
+      *
+      * */
+    def monad_error(): Unit = {
+        import cats.MonadError
+        import cats.instances.either._
+
+        /** 1）定义一个 Either，左边为错误类型，右边待定 */
+        type ErrorOr[A] = Either[String, A]    // type lambda
+
+        /** 2）定义一个 MonadError, 接受这个错误类型，并指明错误类型  */
+        val monadError = MonadError[ErrorOr, String]
+
+        /** 3）通过这个 MonadError 的 pure 方法可以自动推导出右边的类型，并返回 Right */
+        val success = monadError.pure(200)
+        println(success)
+        assert(success.isRight)
+
+        /** 4）raiseError 返回 Left */
+        val failure = monadError.raiseError("Badness")
+        println(failure)
+        assert(failure.isLeft)
+
+        /** 5) 定义 handleError 来接管错误处理 */
+        val res = monadError.handleError(failure) {
+            case "Badness" => monadError.pure("You bad!")
+            case _ => monadError.raiseError("Other error")
+        }
+        res.foreach(println)
+
+        /** 6) Monad Error 也支持 ensure 方法.接受三个参数：
+          *
+          * 第一个是要测试的 Either 数据
+          * 第二个是如果错误返回的数据（类型为Either左边的类型）
+          * 第三个是测试函数
+          * */
+        val res1 = monadError.ensure(success)("Negative number!")(_ > 0)
+        res1.map(x => assert(x == 200))
+
+
+        /***********************
+          * 和其他 Monad 一样，Cats 支持 MonadError syntax 语法。
+          *
+          * 引进 applicative 是因为 MonadError 实际上是继承自 ApplicativeError，所以 syntax 来自 applicative 包
+          */
+        import cats.syntax.applicative._
+        val success1 = 200.pure[ErrorOr]
+        assert(success1 == success)
+
+        import cats.syntax.monadError._
+        assert(Right(200) == success1.ensure("Negative number!")(_ > 0))
+
+        import cats.syntax.applicativeError._
+        val failure1 = "Badness".raiseError[ErrorOr, Int]
+        assert(failure == failure1)
+
+    }
 }

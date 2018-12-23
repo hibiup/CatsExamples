@@ -7,4 +7,9 @@ class Example_13_Either_test extends FlatSpec{
         import Example_13_ErrorHandling._
         cats_either()
     }
+
+    "Monad Error handling" should "" in {
+        import Example_13_ErrorHandling._
+        monad_error()
+    }
 }
