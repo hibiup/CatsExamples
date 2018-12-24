@@ -67,4 +67,28 @@ object Example_14_Eval {
             Eval.now(n)
         }
     }
+
+    /**
+      * Eval.defer 是非常重要的避免 stack overflow 的方法，它可以作用于其他函数，比如 folder_right 定义如下:
+      *
+      * def foldRight[A, B](as: List[A], acc: B)(fn: (A, B) => B): B
+      *
+      * 1）实现一个 defer 版本的 folder_right. 将所有的右操作数都改为 Eval[_], 将处理函数的返回值交由 Eval.defer
+      *    包裹起来，就实现了堆栈安全。
+      * */
+    def safe_folder_right[A, B](list: List[A], init_value: Eval[B])(fn: (A, Eval[B]) => Eval[B]): Eval[B] =
+        list match {
+            case head :: tail =>
+                Eval.defer(fn(head, safe_folder_right(tail, init_value)(fn)))
+            case Nil =>
+                init_value
+        }
+
+    /** 2）然后在 safe_folder_right 的外面实现正常的 folder_right 函数界面，需要注意的是它的内部调用安全版的 safe_folder_right
+      *    时需要将右边参数映射为 Eval[_], 函数方法也需要做一层 map 映射。 */
+    def foldRight[A, B](list: List[A], init_value: B)(fn: (A, B) => B): B =
+        safe_folder_right(list, Eval.now(init_value))    // init_value => Eval.now(init_value)
+        {
+            (a, b) =>  b.map(fn(a, _))     // 为函数方法包裹一层 map 调用： fn(a + b) => b.map(fn(a + _)) 来实现类型转换。
+        }.value
 }

@@ -12,5 +12,7 @@ class Example_14_Eval_test extends FlatSpec{
     "Cats Eval recursive" should "be stack safe" in {
         import Example_14_Eval._
         println(safe_factorial(10000).value)
+
+        println(foldRight((1 to 10000).toList, 0)(_ + _))
     }
 }
