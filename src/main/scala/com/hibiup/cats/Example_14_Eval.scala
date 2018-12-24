@@ -10,20 +10,22 @@ package com.hibiup.cats
   *
   **/
 object Example_14_Eval {
+
     import cats.Eval
 
     def cats_eval(): Unit = {
         println("========================")
-        val now = Eval.now{        // Eval immediately
+        val now = Eval.now { // Eval immediately
             println("Eval.now")
-            "now." + math.random()}
+            "now." + math.random()
+        }
 
-        val later = Eval.later{    // Eval lazy but only once
+        val later = Eval.later { // Eval lazy but only once
             println("Eval.later")
             "later" + math.random()
         }
 
-        val always = Eval.always{  // Eval lazy without memorized
+        val always = Eval.always { // Eval lazy without memorized
             println("Eval.always")
             "always" + math.random()
         }
@@ -38,10 +40,12 @@ object Example_14_Eval {
         var place = "mat"
 
         val saying = Eval.always {
-            println("Step 1"); s"The $animal"
+            println("Step 1");
+            s"The $animal"
         }.map { str =>
             println("Step 2"); s"$str sat on"
-        /** memoize 方法会缓存以上结果，导致 always 失效 */
+
+            /** memoize 方法会缓存以上结果，导致 always 失效 */
         }.memoize.map {
             str => println("Step 3"); s"$str the $place"
         }
@@ -51,9 +55,15 @@ object Example_14_Eval {
         place = "bed"
         println(saying.value)
     }
+}
 
+object Example_14_Eval_trampoline {
+
+    import cats.Eval
 
     /**
+      * p-107
+      *
       * Eval 一个非常重要的特性是它的 defer 方法是 stack 安全的，因为它是基于 Trampoline 的。下面这个例子中的递归是不安全的，
       * 将它传递给 defer 就能够实现安全调用。
       *
@@ -69,6 +79,7 @@ object Example_14_Eval {
     }
 
     /**
+      *
       * Eval.defer 是非常重要的避免 stack overflow 的方法，它可以作用于其他函数，比如 folder_right 定义如下:
       *
       * def foldRight[A, B](as: List[A], acc: B)(fn: (A, B) => B): B
