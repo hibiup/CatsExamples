@@ -67,18 +67,17 @@ object Example_2_simulacrum {
             def truthy(a: A): Boolean = f(a)
         }*/
     //}
-}
 
-/**
-  * 应用时
-  */
-object Example_2_simulacrum_Client {
+
+    /**
+      * 应用时
+      */
+
     /**
       * 2) import 进 @imulacrum.typeclass macro 自动生成的 object CanTruthy 工厂方法 apply 来生成 instance，参数是
       * truthy(a: A): Boolean 函数实体。如果没有 1-2) 这里会出现误判，认为 CanTruthy 不存在，但是错误可以忽略.
       *
       * */
-    import com.hibiup.cats.Example_2_simulacrum.CanTruthy
     implicit val intCanTruthy: CanTruthy[Int] = CanTruthy.apply[Int]({
         case 0 => false
         case _ => true
