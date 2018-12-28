@@ -40,7 +40,7 @@ object Example_14_Eval {
         var place = "mat"
 
         val saying = Eval.always {
-            println("Step 1");
+            println("Step 1")
             s"The $animal"
         }.map { str =>
             println("Step 2"); s"$str sat on"

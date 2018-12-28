@@ -2,7 +2,7 @@ package com.hibiup.cats
 
 import org.scalatest.FlatSpec
 
-class Example_14_Eval_test extends FlatSpec{
+class Example_14_Monad_Eval_test extends FlatSpec{
     "Cats Eval basic usage" should "" in {
         import Example_14_Eval._
         cats_eval()

@@ -1,6 +1,6 @@
 package com.hibiup.cats
 
-object Example_13_ErrorHandling {
+object Example_13_Monad_Either {
     def cats_either() = {
         /**
           * Cats 的 Syntax 包定义了一种方便地将数据隐式打包成希望的 Monoid 的约定 `.asMonoid` 方法。比如：
