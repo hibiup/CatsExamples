@@ -73,31 +73,60 @@ object Example_16_Monad_Reader {
 
     def read_form_database(): Unit = {
         /** 模拟一个数据库 */
+        type Id = Int
+        type Username = String
+        type Password = String
         case class User( username: String, password: String )
-        type DB = Map[Int, User]
-        def UserTable:DB = Map[Int, User](
-            1 -> User("UserA", "PasswordA"),
-            2 -> User("UserB", "PasswordB")
-        )
 
-        /** 1) 定义一个 Reader，作用是从数据库中取出记录, Reader 的预定义参数是数据库,预期返回 A 类型记录 */
+        type Users = Map[Id, Username]
+        type Credentials = Map[Username, Password]
+        // 定义数据表
+        def UserTable:Users = Map[Id, Username](
+            (1, "UserA"),
+            (2, "UserB")
+        )
+        def CredentialTable:Credentials = Map[Username, Password](
+            ("UserA", "PasswordA"),
+            ("UserB", "PasswordB")
+        )
+        // 定义数据库
+        case class DB(users:Users, credentials: Credentials)
+
+        /** 1) 定义 Reader，作用是从数据库中取出记录, Reader 的预定义参数是数据库,预期返回 A 类型记录 */
         import cats.data.Reader
+        type UserReader[A] = Reader[Users, A]
+        type CredentialReader[A] = Reader[Credentials, A]
         type DbReader[A] = Reader[DB, A]
 
-        /** 2) 定义一个函数,函数传入记录 id,得到 Reader[_, Option[User]]
+        /** 2-1) 实现 UserReader 函数, 传入记录 id, 得到 Reader[_, Option[Username]]
           *    注意：不是直接得到纪录, 而是预期这个 Reader 将在执行期传入数据库, 返回记录 */
-        def findUsername(userId: Int): DbReader[Option[User]] = Reader(db => db.get(userId))
-
-        import cats.Eq
-        import cats.syntax.eq._
-        import cats.instances.string._
-        implicit val UserMonoid = new Eq[User]{
-            def eqv(x: User, y: User): Boolean =
-                (x.username === y.username) && (x.password === y.password)
-        }  // 自定义类的 Eq 实例. 另一个例子参见 Example_4_Eq
+        def getUsername(userId: Id):UserReader[Option[Username]] = Reader(table =>
+                table.get(userId)
+        )
+        /** 2-2) 同样定义 CredentialReader */
+        def getCredential(username: Username):CredentialReader[Option[User]] = Reader(table =>
+            table.get(username).map{password =>
+                User(username, password)
+            }
+        )
+        /** 2-3) 将上面两个 Reader 作为 Database Reader 的输入，返回下一级 DbReader。*/
+        def findUser(userId: Int): DbReader[Option[User]] = Reader(db =>
+            for {
+                username  <- getUsername(userId).run(db.users)         // 从 UserReader 中读取
+                credential <- getCredential(username)(db.credentials)  // 从 CredentialReader 中读取
+            } yield credential
+        )
 
         /** 3) 执行函数,得到 Reader. 然后给 Reader.run 传入数据库 => 得到记录 */
-        findUsername(2).run(UserTable).map{user =>
+        findUser(2).run(DB(UserTable,CredentialTable)).map{user =>
+            import cats.Eq
+            import cats.syntax.eq._
+            import cats.instances.string._
+            implicit val UserMonoid = new Eq[User]{
+                def eqv(x: User, y: User): Boolean =
+                    (x.username === y.username) && (x.password === y.password)
+            }  // 自定义类的 Eq 实例. 另一个例子参见 Example_4_Eq
+
             assert(user === User("UserB","PasswordB"))
         }
     }
