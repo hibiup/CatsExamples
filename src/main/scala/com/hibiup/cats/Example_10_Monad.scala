@@ -121,4 +121,126 @@ object Example_10_Monad {
         stringDivideBy("4", "2").foreach(result => println(result))
     }
 
+    /**
+      * Monad 就是 Monoid 的容器，FP 编程就是利用 Monad 容器进行不断的串联调用。和 Monoid 一样，Cats 通过实现 Monad[M] 来支持订制 Monad。
+      * */
+    import cats.Monad
+    def tailrec_example(): Unit = {
+
+        /** 1) 实现一个定制的 Monad */
+        val optionMonad = new  Monad[Option] {
+            override def pure[A](x: A): Option[A] = Option(x)
+
+            override def flatMap[A, B](fa: Option[A])(f: A => Option[B]): Option[B] = fa.flatMap(f)
+
+            /** 2) tailRecM 用于防止 stack overflow */
+            override def tailRecM[A, B](a: A)(f: A => Option[Either[A, B]]): Option[B] = f(a) match {
+                case Some(Left(al)) => tailRecM(al)(f)    // left 代表递归没有结束
+                case Some(Right(b)) => Option(b)          // right 代表递归结束
+                case None => None                         // 如果遇到 None，也结束循环
+            }
+        }
+
+        /** 3) 测试 */
+        import cats.syntax.either._
+        def testRec(n:Int): Option[Int] = {
+            /** 4) 调用 testRec */
+            optionMonad.tailRecM(n){
+                case 0 => Option(0.asRight)     // 结束递归
+                case x => Option((x-1).asLeft)  // 递归
+                case _ => None                  // 实际上不会遇到
+            }
+        }
+
+        import cats.syntax.eq._
+        import cats.instances.int._
+        import cats.instances.option._
+        assert(Option(0) === testRec(100000))
+    }
+
+    def customized_monad_example(): Unit = {
+        sealed trait Tree[+A]
+        final case class Branch[A](left: Tree[A], right: Tree[A]) extends Tree[A]
+        final case class Leaf[A](value: A) extends Tree[A]
+
+        implicit val treeMonad = new Monad[Tree] {
+            override def pure[A](x: A): Tree[A] = Leaf(x)
+
+            override def flatMap[A, B](tree: Tree[A])(func: A => Tree[B]): Tree[B] = tree match {
+                case Leaf(leaf) => func(leaf)
+                case Branch(l, r) => Branch(flatMap(l)(func), flatMap(r)(func))
+            }
+
+            override def tailRecM[A, B](a: A)(f: A => Tree[Either[A, B]]): Tree[B] = f(a) match {
+                case Leaf(Left(leaf)) => tailRecM(leaf)(f)    // left 代表未结束，继续递归
+                case Leaf(Right(leaf)) => Leaf(leaf)          // Right 代表结束
+                case Branch(l, r) => Branch(
+                    flatMap(l) {
+                        case Left(leaf) => tailRecM(leaf)(f)
+                        case Right(leaf) => Leaf(leaf)
+                    },
+                    flatMap(r) {
+                        case Left(leaf) => tailRecM(leaf)(f)
+                        case Right(leaf) => Leaf(leaf)
+                    })
+            }
+        }
+        /** 定义一个隐式转换: Tree => TreeMonad */
+        implicit class TreeMonad[A](val tree:Tree[A])(implicit monad:Monad[Tree]){
+            def flatMap[B](f:A=>Tree[B])=monad.flatMap(tree)(f)
+        }
+
+        def branch[A](left: Tree[A], right: Tree[A]): Tree[A] = Branch(left, right)
+        def leaf[A](value: A): Tree[A] = Leaf(value)
+
+        println(branch(leaf(100), leaf(200)).flatMap{x =>
+            branch(leaf(x - 1), leaf(x + 1))
+        })
+
+        def add_to_tree(i:Int)(tree:Tree[Int]) =
+            tree.flatMap(x =>
+                if (i >= x) branch(leaf(x), leaf(i))
+                else branch(leaf(i), leaf(x))
+            )
+        assert(add_to_tree(115)(add_to_tree(95)(add_to_tree(90)(add_to_tree(110)(leaf(100))))) ==
+                Branch(
+                    Branch(
+                        Branch(
+                            Branch(
+                                Leaf(90),Leaf(115)
+                            ),
+                            Branch(
+                                Leaf(95),Leaf(115)
+                            )
+                        ),
+                        Branch(
+                            Branch(
+                                Leaf(95),Leaf(115)
+                            ),
+                            Branch(
+                                Leaf(100),Leaf(115)
+                            )
+                        )
+                    ),
+                    Branch(
+                        Branch(
+                            Branch(
+                                Leaf(90),Leaf(115)
+                            ),
+                            Branch(
+                                Leaf(95),Leaf(115)
+                            )
+                        ),
+                        Branch(
+                            Branch(
+                                Leaf(95),Leaf(115)
+                            ),
+                            Branch(
+                                Leaf(110),Leaf(115)
+                            )
+                        )
+                    )
+                )
+        )
+    }
 }

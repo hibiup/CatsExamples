@@ -5,7 +5,8 @@ package com.hibiup.cats
   *
   * https://github.com/hibiup/FreeMonad/blob/master/src/main/scala/scalaz/examples/Example_2_State_Monad.scala
   */
-object Example_17_Monad_State {
+object
+ Example_17_Monad_State {
     def state_example(): Unit = {
         /**
           * State 的定义如下：

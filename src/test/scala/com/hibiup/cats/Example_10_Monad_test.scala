@@ -10,7 +10,7 @@ class Example_10_Monad_test extends FlatSpec{
         cats_monad_syntax()
     }
 
-    "Option Monad" should "" in {
-        option_monad()
-    }
+    "Option Monad" should "" in option_monad()
+    "Custominzed monad" should "support tail recursive" in tailrec_example
+    it should "be capable for Tree type" in customized_monad_example
 }
