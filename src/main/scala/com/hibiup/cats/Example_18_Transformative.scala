@@ -1,5 +1,8 @@
 package com.hibiup.cats
 
+
+import scala.concurrent.Future
+
 object Example_18_Transformative {
     /**
       * “Monad 就像一块大卷饼” 这句话的意思是：在运算的过程中，因为运算环境的复杂性，导致我们在很多时候不能直接处理数据。而需要将运算上下文
@@ -79,4 +82,53 @@ object Example_18_Transformative {
         assert(a === OptionT[ErrorOr, Int](Right(Some(10))))
     }
 
+    def future_either_transformer(): Unit = {
+        import scala.concurrent.Future
+        import cats.data.{EitherT, OptionT}
+
+        /** 1) EitherT 将 Either[Throwable, A] 装入 Future. EitherT 将作用在后两个参数上 */
+        type FutureEither[A] = EitherT[Future, Throwable, A]
+
+        /** 2）再将 FutureEither[A] 作为 Option[A] 的容器类型. 得到的最终“大饼”类型为：
+          *
+          *      Future[Either[Throwable,[Option[A]]]]
+          *
+          *   注意包装的顺序是从外到内。
+          * */
+        type FutureEitherOption[A] = OptionT[FutureEither, A]
+
+        import scala.concurrent.ExecutionContext.Implicits.global
+        import cats.implicits._
+
+        /** 3) OptionT(EitherT(Future(...))) 将返回 Future(Success(Right(Option(10))) */
+        val res = 10.pure[FutureEitherOption]
+        import scala.concurrent.Await
+        import scala.concurrent.duration._
+
+        /** 4) value 方法用于解包 monad 得到每部的值。 */
+        val stackF = res.value.value
+        val f = Await.result(stackF, 10 seconds)
+        assert(f.isRight)
+        assert(Some(10) == f.getOrElse(None))
+
+        /** 4-1）也可以忽略容器的层级，直接处理最终值，但是要注意在这个例子中，assert 将发生在另外一个线程内，因此测试线程将捕捉不到错误。 */
+        val f2 = (for {
+                a <- 30.pure[FutureEitherOption]
+                b <- 10.pure[FutureEitherOption]
+            } yield a / b).value.value  // value.value 解包直到 Future，然后用 recover 捕获异常
+                    /** recover 是 Future 的 catch */
+                    .recover{ case e:Throwable => Left(e)
+            } // 返回 Future
+
+        /** 5）Either 的双向处理。*/
+        f2.map{
+            case Left(t) => println(t.getMessage)
+            case Right(i) => {
+                println(i)
+                assert(Option(3) === i)
+            }
+        }
+
+        Await.result(f2,10 seconds)
+    }
 }
