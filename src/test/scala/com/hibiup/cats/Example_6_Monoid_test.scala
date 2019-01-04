@@ -15,6 +15,6 @@ class Example_6_Monoid_test extends FlatSpec{
         option_monoid()
         monoid_syntax()
         sum_a_list_with_moniod()
-        customized_monad()
+        customized_monoid()
     }
 }

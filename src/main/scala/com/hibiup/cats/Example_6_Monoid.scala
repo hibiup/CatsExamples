@@ -92,7 +92,7 @@ object Example_6_Cats_Monoid {
     }
 
     /** 对于定制类 Monoid A, 只要继承 Monad[A], 然后实现相关方法即可以方便地使用: */
-    def customized_monad() {
+    def customized_monoid() {
         /** 例如我们希望定制类 Order 也能够方便地使用 foldLeft Monoid 方法. */
         case class Order(totalCost: Double, quantity: Double)
 
