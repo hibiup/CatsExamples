@@ -50,25 +50,39 @@ object Example_19_Semigroupal {
         import scala.concurrent.ExecutionContext.Implicits.global
         import scala.language.higherKinds
 
-        /** 因为结合率要求运算可以以任意顺序执行，因此 Semigroupal.product 具有并发执行的能力 */
+        /** 1) 因为结合率要求运算可以以任意顺序执行，因此 Semigroupal.product 具有并发执行的能力 */
         val futurePair = Semigroupal[Future].product(
-            Future{
+            Future {
                 println(s"Thread-${Thread.currentThread.getId}")
                 Thread.sleep(1000)
-                "Hello"},
-            Future{
+                "Hello"
+            },
+            Future {
                 println(s"Thread-${Thread.currentThread.getId}")
                 123
             })
-
         import cats.syntax.eq._
         import cats.instances.int._
         import cats.instances.tuple._
         import cats.instances.string._
-        assert(("Hello",123) === Await.result(futurePair, 1.second))
+        assert(("Hello", 123) === Await.result(futurePair, 1.second))
 
-        /** Future 与 Semigroupal 结合可以提供很好的数据并发查询能力。 */
-        case class Cat( name: String,yearOfBirth: Int, favoriteFoods: List[String] )
+        /** 2) 等价于 zip： */
+        val a = Future {
+            println(s"Thread-${Thread.currentThread.getId}")
+            Thread.sleep(1000)
+            "Hello"
+        }
+        val b = Future {
+            println(s"Thread-${Thread.currentThread.getId}")
+            123
+        }
+        val c = a zip b // zip 是并行的
+        assert(("Hello", 123) === Await.result(c, 2.second))
+
+
+        /** 3) Future 与 Semigroupal 结合可以提供很好的数据并发查询能力,也避免了 zip 必须数据对齐的限制。 */
+        case class Cat(name: String, yearOfBirth: Int, favoriteFoods: List[String])
 
         import cats.syntax.apply._
         val futureCat = (
@@ -76,7 +90,60 @@ object Example_19_Semigroupal {
                 Future("Garfield"),
                 Future(1978),
                 Future(List("Lasagne"))
-        ).mapN(Cat.apply)   // product syntax
-        assert(Cat("Garfield",1978,List("Lasagne")) == Await.result(futureCat, 1.second))
+        ).mapN(Cat.apply) // product syntax
+        println("====")
+        assert(Cat("Garfield", 1978, List("Lasagne")) == Await.result(futureCat, 1.second))
+
+
+        /** 4) product 的工作方式其实等价于 flatMap */
+        val a1 =Future {
+            println(s"Thread-${Thread.currentThread.getId}")
+            Thread.sleep(1000)
+            "Hello"
+        }
+        val b1 = Future {
+            println(s"Thread-${Thread.currentThread.getId}")
+            123
+        }
+        val forFuture1 = for {
+            x <- a1
+            y <- b1
+        } yield (x, y)
+        assert(("Hello", 123) === Await.result(forFuture1, 2.second))
+
+        /** 4-1) 但是不等价于以下, 以下两条 <- 指令之间有明显停顿，因为 Future 在被定义的时候就开始执行, 因此上面在执行到
+          *    for comprehansion 时 两个 Future 都已经处在执行状态, 而下面的 Future 在循环体内被定义, 因此是顺序执行 flatMap,
+          *    并顺序生成 Future.  注意体会两者的区别
+          *
+          *    同时, product 函数也一样, 我们先定义了 Future 参数, 因此当 product 函数被调用的时候, Future 实际上已经处于执行状态
+          *    这就是为什么它看上去具有并行的能力而 for-comprehansion 循环体本身没有（除非参数定义在循环体外）。
+          *    */
+        val forFuture2 = for {
+            x <- Future {
+                println(s"Thread-${Thread.currentThread.getId}")
+                Thread.sleep(1000)
+                "Hello"
+            } // 有明显停顿后才执行下一条指令
+            y <- Future {
+                println(s"Thread-${Thread.currentThread.getId}")
+                123
+            }
+        } yield (x, y)
+        assert(("Hello", 123) === Await.result(forFuture2, 2.second))
+    }
+
+    def Semigroupal_either() {
+        import cats.Semigroupal
+
+        /** product 作用于 Either 时，和 flatMap 一样在遇到第一个失败后会终止后面的执行.这是因为 Cats 的 Monad 继承了
+          * Semigroup(也就是说 Cats Monad 也很可能是一个 Monoid, 比如 Option 既是一个 Monoid 也是 Monad ),因此它们
+          * 和 Future 等 Monad 的行为是一致的.  */
+        import cats.instances.either._
+        type ErrorOr[A] = Either[Vector[String], A]
+        val f = Semigroupal[ErrorOr].product(
+            Left(Vector("Error 1")),  // 第一个失败
+            Left(Vector("Error 2"))   // 第二个失败(不会被执行)
+        )
+        println(f)
     }
 }
