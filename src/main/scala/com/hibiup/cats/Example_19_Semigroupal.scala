@@ -136,8 +136,29 @@ object Example_19_Semigroupal {
         import cats.Semigroupal
 
         /** product 作用于 Either 时，和 flatMap 一样在遇到第一个失败后会终止后面的执行.这是因为 Cats 的 Monad 继承了
-          * Semigroup(也就是说 Cats Monad 也很可能是一个 Monoid, 比如 Option 既是一个 Monoid 也是 Monad ),因此它们
-          * 和 Future 等 Monad 的行为是一致的.  */
+          * Semigroupal (也就是说 Cats Monad 也很可能是一个 Monoid, 比如 Option 既是一个 Monoid 也是 Monad ),因此它们
+          * 和 Future 等 Monad 的行为是一致的.
+          *
+          *
+          * Cats Monad 也很可能是一个 Monoid: 实际上，Monad 继承了 Applicative，而 Applicative 继承了 Semigroupal，
+          * 它们的继承关系如下：p159-160:
+          *
+            trait Apply[F[_]] extends Semigroupal[F] with Functor[F] {
+                def ap[A, B](ff: F[A => B])(fa: F[A]): F[B]
+                def product[A, B](fa: F[A], fb: F[B]): F[(A, B)] =
+                    ap(map(fa)(a => (b: B) => (a, b)))(fb)
+            }
+
+            trait Applicative[F[_]] extends Apply[F] {
+                def pure[A](a: A): F[A]
+            }
+          *
+          * 可以看到：Applicative <- Apply <- Semigroupal(with Functor)
+          * 并且我们已知：Monad <- Applicative <- Functor
+          * 因此得到： Monad <- Applicative <- Semigroupal(with Functor)
+          *
+          * 但是 Monoid 则直接继承了 Semigroupal，所以 Monad 一定是 Semigroupal，但未必是 Monoid.
+          * */
         import cats.instances.either._
         type ErrorOr[A] = Either[Vector[String], A]
         val f = Semigroupal[ErrorOr].product(
