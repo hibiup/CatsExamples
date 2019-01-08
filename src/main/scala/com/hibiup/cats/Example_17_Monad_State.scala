@@ -13,13 +13,13 @@ object
           *
              State[S, A]
           *
-          * 第一个参数是状态值 A，第二个是返回值的第二个要素 S。完整的返回值是 (A, S)
+          * 第一个参数是状态值 S，第二个是返回值的第二个要素 A。完整的返回值是 (S, A)
           *
           * 和 Reader, Writer monad 类似，cats.data.State 是生成 State monad 的工厂类。传入一个满足类型参数的函数参数，返回一个
           * Monad 实例，然后这个 Monad 实例在应用中接受工厂类传入的函数参数的参数值来进行运算。
           * */
 
-        /** 1）定义一个 State Monad，输入 Int 类型数据，返回 (Int, String) 。在这个例子中我们暂时不作状态转换，只介绍接口。*/
+        /** 1）定义一个 State Monad，输入 Int 类型状态数据，返回 (Int, String) 。在这个例子中我们暂时不作状态转换，只介绍接口。*/
         import cats.data.State
         val stateMonad = State[Int, String] { state =>
             (state, s"The state is $state")
@@ -29,12 +29,12 @@ object
         val state1 = stateMonad.run(10)
 
         /** 3）重新获取回状态值和返回值 */
-        val (s1, r1) = state1.value
+        val (s1, a1) = state1.value
         import cats.syntax.eq._
         import cats.instances.int._
         assert(s1 === 10)
         import cats.instances.string._
-        assert(r1 === "The state is 10")
+        assert(a1 === "The state is 10")
 
         /** 3-1）或者只保留状态值 */
         val s2 = stateMonad.runS(20).value
@@ -48,8 +48,8 @@ object
           */
         val stateMonad2 = State.get[Int]
         /** run monad 并得到结果 */
-        val (s3, r3) = stateMonad2.run(10).value   // result  会被设置为和 state 相同。（result = state:cats.Id？）
-        assert(s3 === r3)
+        val (s3, a3) = stateMonad2.run(10).value   // result  会被设置为和 state 相同。（result = state:cats.Id？）
+        assert(s3 === a3)
         val _s3 = stateMonad2.runS(10).value
         val __s3 = stateMonad2.runA(10).value
         assert(_s3 === __s3)
