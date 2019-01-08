@@ -2,40 +2,100 @@ package com.hibiup.cats
 
 
 /**
-  * 参考：https://typelevel.org/cats/datatypes/freemonad.html
+  * 翻译自：https://typelevel.org/cats/datatypes/freemonad.html
+  *
+  * 从数学的角度来说，一个 free monad（至少在编程语言环境中）是一个与“健忘”函子（Forgetful functor）相左伴随的结构，其定义域是
+  * Monads 类别，其共域是自函子（Endofunctors）类别（Monads -> Endofunctors）.
+  *
+  * 具体地说：Free 是一个足够聪明的结构，允许我们从任何仿函数(functor)构建出一个简单的 Monad。
+  *
+  * 这个所谓“健忘”的函子（Forgetful functor）它接受一个 Monad 输入：
+  *
+  *   1）忽略它的 monadic (flatMap) 部分
+  *   2）忽略它的 pointed (pure) 部分
+  *   3）只保留了 functor (map) 部分
+  *
+  * 因此如果我们反转箭头（Endofunctors -> Monads）得到它的左伴随（left adjoint）, 我们就可以倒推出 Free monad：
+  *
+  *   1）输入一个 functor
+  *   2）添加 pointed 部分
+  *   3）添加 monadic 行为
+  *
+  * 因此从实现的角度来看，从一个 functor 构建出一个 monad 可以通过以下步骤：
+  *
+  *   sealed abstract class Free[F[_], A]
+  *   final case class Pure[F[_], A](a: A) extends Free[F, A]
+  *   final case class Suspend[F[_], A](a: F[Free[F, A]]) extends Free[F, A]
+  *
+  * （这概括了定点仿函数的概念）
+  *
+  * 以上代码表达了:
+  *
+  *   1) Pure 通过 A 值构造出 Free 的实例（它是 pure 函数的具体化）
+  *   2) Suspend 通过向 F 传递一个已存在的 Free 构造出新的 Free（它是 flatMap 函数的具体化）
+  *
+  * 所以一个典型的 Free 结构看起来如下：
+  *
+  *   Suspend(F(Suspend(F(Suspend(F(....(Pure(a))))))))
+  *
+  * 可以看出 Free 是一个递归结构，它使用 F[A] 中的 A 作为具有终端元素 Pure 的递归“载体”
+  *
+  * 从计算的角度来看，Free 的递归结构可以看作是一系列操作：
+  *
+  *   1）Pure 返回 A 值并结束整个计算。
+  *   2）Suspend 是持续（递归）的；它用一个Suspension functor（https://topospaces.subwiki.org/wiki/Suspension_functor）F
+  *   （例如可以是一个命令）暂停当前计算并将控制权交给呼叫者。A 表示与此计算绑定的值。
+  *
+  * 请注意，这种自由（Free）构造具有有趣的品质，它可以在堆上递归编码，而不像经典函数调用那样在堆上进行编码。这提供了我们之前听说过的
+  * 堆栈安全性，允许安全运行非常大的自由结构体。
+  *
+  * 对于具有非常好奇心的人来说：
+  *
+  * 如果你观察 Cats 的实现，又将会看到另一个 ADT 成员 FreeT：
+  *
+  *   case class FlatMapped[S[_], B, C](c: Free[S, C], f: C => Free[S, B]) extends Free[S, B]
+  *
+  * FlatMapped 表示调用子例程 c，当 c 完成后，它将 c 的结果传递给函数 f 继续计算。
+  *
+  * 它实际上是 Free 结构的优化，允许在非常深的递归 Free 计算中解决隐含的二元复杂性问题。
+  *
+  * 这与重复附加到 List[_] 完全相同，随着操作序列变得越长，flatMap完成整个结构的“穿越”也就越慢。而使用 FlatMapped，Free 成为一个右
+  * 相关的结构，不再受二元复杂性的影响。
+  *
+  */
+
+/**
+  * Free 实例:
+  *
+  * Free 程序由三部分组成：描述（description），实现（implementation） 和关注分离（separation of concern）：
+  *
+  * 1）描述（description）：用 ADT（algebraic data type）来抽象行为。也就是定义 A，并投射出 Suspend.（得到左伴随）
+  * 2）关注分离（separation of concern）：用 DSL 来实现业务流程。
+  * 3）实现（implementation）：实现 Pure，即用 DSL 描述的的具体实现部分。
   *
   * 使用 Cats Free 需要引入 cats-free 模块
   *
-  * libraryDependencies ++= Seq(
-  * "org.typelevel" %% "cats-free" % catsVersion
-  * ...
-  * )
-  *
-  * Free 程序的特点是描述（description），实现（implementation）和关注分离（separation of concern），因此在实现过程中有以下定式：
-  *
-  * 1）用 ADT（algebraic data type）来作为描述（description）部分，既然是描述，我们很自然会联想到 DSL
-  * 2）算法即用 DSL 描述的功能的具体实现部分
-  * 3）关注点分离，指的是用 DSL 来描述业务流程
+  *  libraryDependencies ++= Seq(
+  *    "org.typelevel" %% "cats-free" % catsVersion
+  *    ...
+  *  )
   *
   * */
 object Example_20_Free {
     def free_monad_example(): Unit = {
         /** 这个例子演示通过 Free 存储一个键值对 Storage */
 
-        /** 1) 功能描述：也就是定义 ADT（ADT：Algebraic Data Type），也就是用代数类型来描述这个存储的运算 */
+        /** 1-1) 功能描述：也就是定义 ADT（ADT：Algebraic Data Type），也就是用代数类型来描述运算 */
         sealed trait KVStoreA[A]
         final case class Put[T](key: String, value: T) extends KVStoreA[Unit]
         final case class Get[T](key: String) extends KVStoreA[Option[T]]
         final case class Delete(key: String) extends KVStoreA[Unit]
 
-        /** 接下来我们需要通过以下几个步骤来 "freeing" 这些 ADT:
-          *
-          * 2-1) 得到 KVStoreA 的 Free 类型投影
-          * */
+        /** 1-2) 定义 KVStoreA 的 Free 类型投影 */
         import cats.free.Free
         type KVStore[A] = Free[KVStoreA, A]
 
-        /** 2-2) 定义 DSL, 依然是功能描述. 作用是通过 liftF 将对 KVStoreA 的 ADT 提升到对其 Free 类型的投影. */
+        /** 1-3）DSL，通过 liftF 将 KVStoreA 的 ADT 提升到其 Free 类型的投影. */
         import cats.free.Free.liftF
         def put[T](key: String, value: T): KVStore[Unit] = liftF[KVStoreA, Unit](Put[T](key, value))
         def get[T](key: String): KVStore[Option[T]] = liftF[KVStoreA, Option[T]](Get[T](key))
@@ -47,8 +107,13 @@ object Example_20_Free {
                 _ <- vMaybe.map(v => put[T](key, f(v))).getOrElse(Free.pure(()))
             } yield ()
 
-        /** 2-3) 关注分离：用 Free 类行投影出的 DSL 函数来描述业务运算 */
-        def program(): KVStore[Option[Int]] =
+
+        /**
+          * 接下来我们需要通过以下几个步骤来 "freeing" 这些 ADT:
+          *
+          * 2) 关注分离：用 DSL 来描述业务运算
+          * */
+        def program: KVStore[Option[Int]] =
             for {
                 _ <- put("wild-cats", 10)
                 _ <- update[Int]("wild-cats", (_ + 12))
@@ -57,16 +122,19 @@ object Example_20_Free {
                 _ <- delete("pet-cats")
             } yield n  // Free{"wild-cats", 10 ... } == KVStoreA{"wild-cats", 10 ... }
 
-        /** 3) 功能实现：
-          *
+        /**
           * program 看上去貌似一个 monadic flow，但是事实上这里只是构建了一个递归运算的结构（分离了关注），也就是说 Free 只是
           * 被用于这些嵌入式 DSL 来构建执行流程的，这个流程并不能被直接执行。如果我们试图运行 program，实际上只会得到一个
           * Free[_] 结构，得不到期待的结果：
           * */
-        println(program())  // Free[...]
+        println(program)  // Free[...]
 
-        /** 因此接下来我们需要一个能够执行这个流程的“编译器”，也就是实现 F[_] -> G[_] 过程。Cats 为此提供了一个 FunctionK[F, G]
-          * 函数(syntax 语法是 ~> ) 来封装这个过程. */
+
+        /** 3) 功能实现(Pure)：
+          *
+          * 因此接下来我们需要一个能够执行这个流程的“编译器”，也就是实现左伴随 F[_] -> G[_] 过程，得到真正的 Monad。
+          * Cats 为此提供了一个 FunctionK[F, G] 函数(syntax 语法是 ~> ) 来封装这个过程.
+          * */
         // import cats.arrow.FunctionK
         import cats.{Id, ~>}
         import scala.collection.mutable
@@ -82,7 +150,7 @@ object Example_20_Free {
                             ()     // 不必担心这里的误报
                         case Get(key) =>
                             println(s"get($key)")
-                            kvs.get(key).map(_.asInstanceOf[A])
+                            kvs.get(key)  // .map(_.asInstanceOf[A])
                         case Delete(key) =>
                             println(s"delete($key)")
                             kvs.remove(key)
@@ -94,20 +162,23 @@ object Example_20_Free {
         val result: Option[Int] = program.foldMap(impureCompiler)
         println(result)  // Option(22)
 
+
         /** 3-1）也可以用 State monad 来实现这个编译器　*/
         import cats.data.State
         type KVStoreState[A] = State[Map[String, Any], A]    // 因为可能得到 A, 也可能得到 Option[A]，所以只能用 Any
         val pureCompiler: KVStoreA ~> KVStoreState = new (KVStoreA ~> KVStoreState) {
             def apply[A](fa: KVStoreA[A]): KVStoreState[A] = fa match {
                     case Put(key, value) => State.modify(_.updated(key, value))
-                    case Get(key) => State.inspect(_.get(key).map(_.asInstanceOf[A]))
+                    case Get(key) => State.inspect(_.get(key)/*.map(_.asInstanceOf[A])*/)
                     case Delete(key) => State.modify(_ - key)
                 }
         }
+
         /** 4-1）执行 */
         val result2: (Map[String, Any], Option[Int]) = program.foldMap(pureCompiler).run(Map.empty).value
         assert(result2._2 == result)  // result2: (Map[String,Any], Option[Int]) = (Map(wild-cats -> 22),Some(22))
     }
+
 
     def free_interact(): Unit = {
         /** 1）功能描述：定义 ADT 来描述功能 */
