@@ -4,10 +4,10 @@ package com.hibiup.cats
 /**
   * 翻译自：https://typelevel.org/cats/datatypes/freemonad.html
   *
-  * 从数学的角度来说，一个 free monad（至少在编程语言环境中）是一个与“健忘”函子（Forgetful functor）相左伴随的结构，其定义域是
-  * Monads 类别，其共域是自函子（Endofunctors）类别（Monads -> Endofunctors）.
+  * 从数学的角度来说，一个 free monad（至少在编程语言环境中）是一个左伴随的定义域是　Monads，共域是自函子（Endofunctors）的
+  * （Monads -> Endofunctors）结构所投射出的“健忘”（Forgetful）的函子（Endofunctors）结构.
   *
-  * 具体地说：Free 是一个足够聪明的结构，允许我们从任何仿函数(functor)构建出一个简单的 Monad。
+  * 具体地说：Free 是一个足够聪明的结构，它允许我们从任何仿函数(functor)构建出一个简单的 Monad。
   *
   * 这个所谓“健忘”的函子（Forgetful functor）它接受一个 Monad 输入：
   *
@@ -15,7 +15,7 @@ package com.hibiup.cats
   *   2）忽略它的 pointed (pure) 部分
   *   3）只保留了 functor (map) 部分
   *
-  * 因此如果我们反转箭头（Endofunctors -> Monads）得到它的左伴随（left adjoint）, 我们就可以倒推出 Free monad：
+  * 也就是说，如果我们反转箭头（Endofunctors -> Monads）倒推它的左伴随（left adjoint）, 我们就可以得到 Free monad：
   *
   *   1）输入一个 functor
   *   2）添加 pointed 部分
