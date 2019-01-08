@@ -5,7 +5,7 @@ package com.hibiup.cats
   * 翻译自：https://typelevel.org/cats/datatypes/freemonad.html
   *
   * 从数学的角度来说，一个 free monad（至少在编程语言环境中）是一个左伴随的定义域是　Monads，共域是自函子（Endofunctors）的
-  * （Monads -> Endofunctors）结构所投射出的“健忘”（Forgetful）的函子（Endofunctors）结构.
+  * 结构（Monads -> Endofunctors）所投射出的“健忘”（Forgetful）的函子（Endofunctors）.
   *
   * 具体地说：Free 是一个足够聪明的结构，它允许我们从任何仿函数(functor)构建出一个简单的 Monad。
   *
