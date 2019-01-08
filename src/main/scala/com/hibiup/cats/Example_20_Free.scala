@@ -69,9 +69,9 @@ package com.hibiup.cats
   *
   * Free 程序由三部分组成：描述（description），实现（implementation） 和关注分离（separation of concern）：
   *
-  * 1）描述（description）：用 ADT（algebraic data type）来抽象行为。也就是定义 A，并投射出 Suspend.（得到左伴随）
-  * 2）关注分离（separation of concern）：用 DSL 来实现业务流程。
-  * 3）实现（implementation）：实现 Pure，即用 DSL 描述的的具体实现部分。
+  * 1）描述（description）：用 ADT（algebraic data type）来抽象行为。也就是定义 A.
+  * 2）关注分离（separation of concern）：实现 suspend，即用 DSL 来实现业务流程。
+  * 3）实现（implementation）：实现 Pure, 得到左伴随(Monad). 即根据 ADT 得到 Monad。
   *
   * 使用 Cats Free 需要引入 cats-free 模块
   *
