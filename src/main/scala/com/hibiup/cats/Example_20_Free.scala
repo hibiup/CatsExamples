@@ -3,8 +3,25 @@ package com.hibiup.cats
 
 /**
   * 翻译自：https://typelevel.org/cats/datatypes/freemonad.html
+  */
+
+/** # 什么是 Free？
   *
-  * 从数学的角度来说，一个 free monad（至少在编程语言环境中）是一个左伴随的定义域是　Monads，共域是自函子（Endofunctors）的
+  * Free monad 是一种结构，允许你从任何Functor 构建出一个 monad。它是一种表示和操纵计算的纯粹方式. 特别是，Free monad 提供了以下
+  * 实践:
+  *
+  *   * 将有状态计算表示为数据，并运行它们
+  *   * 以堆栈安全的方式运行递归计算
+  *   * 构建嵌入式DSL（特定于域的语言）
+  *   * 用一种自然的方式将计算重新定位到一个解释器上
+  *
+  * (在 Cats 中, free monad 的表达形式是 Free[_].)
+  **/
+
+/**
+  * # 数学原理是什么？
+  *
+  * 从数学的角度来说，一个 free monad（至少在编程语言环境中）是一个左伴随的定义域是 Monads，共域是自函子（Endofunctors）的
   * 结构（Monads -> Endofunctors）所投射出的“健忘”（Forgetful）的函子（Endofunctors）.
   *
   * 具体地说：Free 是一个足够聪明的结构，它允许我们从任何仿函数(functor)构建出一个简单的 Monad。
@@ -65,13 +82,7 @@ package com.hibiup.cats
   */
 
 /**
-  * Free 实例:
-  *
-  * Free 程序由三部分组成：描述（description），实现（implementation） 和关注分离（separation of concern）：
-  *
-  * 1）描述（description）：用 ADT（algebraic data type）来抽象行为。也就是定义 A.
-  * 2）关注分离（separation of concern）：实现 suspend，即用 DSL 来实现业务流程。
-  * 3）实现（implementation）：实现 Pure, 得到左伴随(Monad). 即根据 ADT 得到 Monad。
+  * 如何实现 Free Monad？
   *
   * 使用 Cats Free 需要引入 cats-free 模块
   *
@@ -80,22 +91,57 @@ package com.hibiup.cats
   *    ...
   *  )
   *
+  *
+  * Free 程序由三部分组成：描述（description），实现（implementation） 和关注分离（separation of concern）：
+  *
+  * 1）描述（description）：用 ADT（algebraic data type）来抽象行为。也就是定义 A.
+  * 2）关注分离（separation of concern）：实现 suspend，即用 DSL 来实现业务流程。
+  * 3）实现（implementation）：实现 Pure, 得到左伴随(Monad). 即根据 ADT 得到 Monad。
+  *
+  *
+  * 我们的程序相应地可以编写为“程序”（既“描述”部分），编译“程序”（“实现”部分），和执行“程序”（执行分离出来的运算流程）
+  * 三个部分。
+  *
   * */
 object Example_20_Free {
     def free_monad_example(): Unit = {
-        /** 这个例子演示通过 Free 操作一个键值对 Storage 对象*/
+        /**
+          * 这个例子演示通过 Free 操作一个键值对 Storage 对象
+          *
+          * 让我们想象一下，我们想为键值存储创建一个DSL。我们希望能够用键做三件事：
+          *
+          *   * 将值放入存储器，并将其与 key 相关联
+          *   * 从给定 key 的存储器中获取值
+          *   * 将给定 key 的值情况下从存储器中删除
+          *
+          * */
 
-        /** 1-1) 功能描述：也就是定义 ADT（ADT：Algebraic Data Type），也就是用代数模型来描述运算 */
+        /**
+          * 1-1) 功能描述：也就是定义 ADT（ADT：Algebraic Data Type），也就是用代数模型来描述运算
+          *
+          * ADT 代表计算的代数模型。在这种情况下，它指的是一组封闭的类型，它们可以组合起来构建复杂的递归值
+          *
+          * */
         sealed trait KVStoreA[A]
         final case class Put[T](key: String, value: T) extends KVStoreA[Unit]
         final case class Get[T](key: String) extends KVStoreA[Option[T]]
         final case class Delete(key: String) extends KVStoreA[Unit]
 
-        /** 1-2) 定义 KVStoreA 的 Free 类型投影 */
+        /**
+          * 接下来我们需要通过以下几个步骤来 "freeing" 这些 ADT:
+          *
+          * 1-2) 定义 KVStoreA 的 Free 类型投影 */
         import cats.free.Free
         type KVStore[A] = Free[KVStoreA, A]
 
-        /** 1-3）DSL，通过 liftF 将 KVStoreA 的 ADT 提升到其 Free 类型的投影. */
+        /**
+          * 1-3）DSL，通过 liftF 将 KVStoreA 的 ADT 提升到其 Free 类型的投影.
+          *
+          * lift 的目的是：
+          *   * 将计算升级为纯函数，使用不可变的值
+          *   * 将程序的创建和执行分离开
+          *   * 能够支持许多不同的执行方法
+          * */
         import cats.free.Free.liftF
         def put[T](key: String, value: T): KVStore[Unit] = liftF[KVStoreA, Unit](Put[T](key, value))
         def get[T](key: String): KVStore[Option[T]] = liftF[KVStoreA, Option[T]](Get[T](key))
@@ -109,8 +155,6 @@ object Example_20_Free {
 
 
         /**
-          * 接下来我们需要通过以下几个步骤来 "freeing" 这些 ADT:
-          *
           * 2) 关注分离：用 DSL 来描述业务运算
           * */
         def program: KVStore[Option[Int]] =
