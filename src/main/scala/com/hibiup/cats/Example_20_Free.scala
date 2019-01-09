@@ -83,7 +83,7 @@ package com.hibiup.cats
   * */
 object Example_20_Free {
     def free_monad_example(): Unit = {
-        /** 这个例子演示通过 Free 存储一个键值对 Storage */
+        /** 这个例子演示通过 Free 操作一个键值对 Storage 对象*/
 
         /** 1-1) 功能描述：也就是定义 ADT（ADT：Algebraic Data Type），也就是用代数类型来描述运算 */
         sealed trait KVStoreA[A]
@@ -169,7 +169,7 @@ object Example_20_Free {
         val pureCompiler: KVStoreA ~> KVStoreState = new (KVStoreA ~> KVStoreState) {
             def apply[A](fa: KVStoreA[A]): KVStoreState[A] = fa match {
                     case Put(key, value) => State.modify(_.updated(key, value))
-                    case Get(key) => State.inspect(_.get(key)/*.map(_.asInstanceOf[A])*/)
+                    case Get(key) => State.inspect(_.get(key).map(_.asInstanceOf[A]))
                     case Delete(key) => State.modify(_ - key)
                 }
         }
@@ -245,5 +245,81 @@ object Example_20_Free {
 
         /** 4) 执行 */
         val evaled: Unit = program.foldMap(interpreter)
+    }
+
+    /**
+      * FreeT
+      *
+      * 通常我们想要在构建 Free monad 时交织语法树，而某些效果未被声明为 ADT。 FreeT 通过允许我们将 AST 的构建步骤与
+      * 其他基本 monad 中的调用操作混合来解决这个问题。
+      *
+      *　在以下示例中，显示了一个基本控制台应用程序。当用户输入一些文本时，我们使用单独的State monad来跟踪用户键入的内容
+      *
+      * 正如我们在这种情况下可以观察到的那样，FreeT　为我们提供了一种替代方案，可以将 state monad 委托给更强的等价机制，
+      * 而不是在我们自己的 ADT 中模拟 State 运算
+      * */
+
+    def freeT_example(): Unit = {
+        import cats.free._
+        import cats._
+        import cats.data._
+
+        /** 1) 定义一个没有 state 语义的 ADT 基类 */
+        sealed abstract class Teletype[A] extends Product with Serializable
+        /** 1-1) 继承这个基类 */
+        final case class WriteLine(line : String) extends Teletype[Unit]
+        final case class ReadLine(prompt : String) extends Teletype[String]
+
+        /** 1-2) 使用 FreeT transformer */
+        type TeletypeT[M[_], A] = FreeT[Teletype, M, A]
+        type Log = List[String]
+        type TeletypeState[A] = State[List[String], A]
+
+        /** 1-3) 用 FreeT.liftF 来提升 transformer, 得到 Teletype 的 Free 结构. */
+        object TeletypeOps {
+            def writeLine(line : String) : TeletypeT[TeletypeState, Unit] =
+                FreeT.liftF[Teletype, TeletypeState, Unit](WriteLine(line))
+            def readLine(prompt : String) : TeletypeT[TeletypeState, String] =
+                FreeT.liftF[Teletype, TeletypeState, String](ReadLine(prompt))
+            def log(s : String) : TeletypeT[TeletypeState, Unit] =
+                FreeT.liftT[Teletype, TeletypeState, Unit](State.modify(s :: _))
+        }
+
+        /** 2) 实现关注分离 */
+        def program : TeletypeT[TeletypeState, Unit] = {
+            for {
+                userSaid <- TeletypeOps.readLine("what's up?!")
+                _ <- TeletypeOps.log(s"user said : $userSaid")
+                _ <- TeletypeOps.writeLine("thanks, see you soon!")
+            } yield ()
+        }
+
+        /** 3) Pure: 直接用 StateT 实现运算实体. */
+        def interpreter = new (Teletype ~> TeletypeState) {
+            def apply[A](fa : Teletype[A]) : TeletypeState[A] = {
+                fa match {
+                    case ReadLine(prompt) =>
+                        println(prompt)
+                        val userInput = "hanging in here" //scala.io.StdIn.readLine()
+                        StateT.pure[Eval, List[String], A](userInput)
+                    case WriteLine(line) =>
+                        StateT.pure[Eval, List[String], A](println(line))
+                }
+            }
+        }
+
+        import TeletypeOps._
+
+        /** 4) 执行 */
+        val state = program.foldMap(interpreter)
+        // state: TeletypeState[Unit] = cats.data.IndexedStateT@69c0c213
+
+        val initialState = Nil
+        // initialState: scala.collection.immutable.Nil.type = List()
+
+        val (stored, _) = state.run(initialState).value
+        // what's up?!
+        // thanks, see you soon!
+        // stored: List[String] = List(user said : hanging in here)
     }
 }
