@@ -85,7 +85,7 @@ object Example_20_Free {
     def free_monad_example(): Unit = {
         /** 这个例子演示通过 Free 操作一个键值对 Storage 对象*/
 
-        /** 1-1) 功能描述：也就是定义 ADT（ADT：Algebraic Data Type），也就是用代数类型来描述运算 */
+        /** 1-1) 功能描述：也就是定义 ADT（ADT：Algebraic Data Type），也就是用代数模型来描述运算 */
         sealed trait KVStoreA[A]
         final case class Put[T](key: String, value: T) extends KVStoreA[Unit]
         final case class Get[T](key: String) extends KVStoreA[Option[T]]
@@ -180,17 +180,31 @@ object Example_20_Free {
     }
 
 
-    def free_interact(): Unit = {
-        /** 1）功能描述：定义 ADT 来描述功能 */
+    /**
+      * 真实世界的应用程序经常将不同的代数组合在一起。 注入类型类允许我们在 Free 的上下文中将不同的代数组合使用．
+      *
+      * 让我们看一个将不相关的 ADT 组合成 EitherK 的一个简单例子，它可以构成一个更复杂的程序
+      * */
+    def composing_free(): Unit = {
+        /** 1-1）功能描述：定义 ADT 来描述功能 */
         sealed trait Interact[A]
         case class Ask(prompt: String) extends Interact[String]
         case class Tell(msg: String) extends Interact[Unit]
 
+        // 定义另外一个 ADT
         sealed trait DataOp[A]
         case class AddCat(a: String) extends DataOp[Unit]
         case class GetAllCats() extends DataOp[List[String]]
 
-        /** lift 到 DSL */
+        /** 1-2) 一旦定义了ADT，我们就可以正式声明将这些 Free 组合起来的 EitherK 代数模型 */
+        import cats.data.EitherK   // EitherK 帮助我们将两个 Free 组合在一起得到一个新的 Free
+        type CatsApp[A] = EitherK[DataOp, Interact, A]
+
+        /**
+          * 1-3) lift 到 DSL
+          *
+          * 为了利用 monadic 组合，我们使用 smart constructors 将我们的代数模型提升到 Free
+          * */
         import cats.free.Free
         import cats.InjectK
         class Interacts[F[_]](implicit I: InjectK[Interact, F]) {
@@ -209,9 +223,10 @@ object Example_20_Free {
             implicit def dataSource[F[_]](implicit I: InjectK[DataOp, F]): DataSource[F] = new DataSource[F]
         }
 
-        /** 2）分离关注点 */
-        import cats.data.EitherK
-        type CatsApp[A] = EitherK[DataOp, Interact, A]
+        /** 2）分离关注点
+          *
+          * ADT 现在很容易组成，并且在一元情境中简单地交织在一起
+          * */
         def program(implicit I : Interacts[CatsApp], D : DataSource[CatsApp]): Free[CatsApp, Unit] = {
             import I._, D._
             for {
@@ -222,7 +237,10 @@ object Example_20_Free {
             } yield ()
         }
 
-        /** 3) 功能实现 */
+        /** 3) 功能实现
+          *
+          * 最后，我们为每个ADT 编写一个解释器，并将它们与 FunctionK 结合到 EitherK，以便它们可以编译并应用于我们的 Free 代码
+          * */
         import scala.collection.mutable.ListBuffer
 
         import cats.{~>, Id}
@@ -246,6 +264,7 @@ object Example_20_Free {
         /** 4) 执行 */
         val evaled: Unit = program.foldMap(interpreter)
     }
+
 
     /**
       * FreeT
