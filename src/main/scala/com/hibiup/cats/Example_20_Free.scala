@@ -7,7 +7,7 @@ package com.hibiup.cats
 
 /** # 什么是 Free？
   *
-  * Free monad 是一种结构，允许你从任何Functor 构建出一个 monad。它是一种表示和操纵计算的纯粹方式. 特别是，Free monad 提供了以下
+  * Free monad 是一种结构，允许你从任何Functor 构建出一个 monad。它以纯（pure）的方式表达和执行计算. 特别是，Free monad 提供了以下
   * 实践:
   *
   *   * 将有状态计算表示为数据，并运行它们
@@ -316,7 +316,7 @@ object Example_20_Free {
       * 通常我们想要在构建 Free monad 时交织语法树，而某些效果未被声明为 ADT。 FreeT 通过允许我们将 AST 的构建步骤与
       * 其他基本 monad 中的调用操作混合来解决这个问题。
       *
-      *　在以下示例中，显示了一个基本控制台应用程序。当用户输入一些文本时，我们使用单独的State monad来跟踪用户键入的内容
+      * 在以下示例中，显示了一个基本控制台应用程序。当用户输入一些文本时，我们使用单独的State monad来跟踪用户键入的内容
       *
       * 正如我们在这种情况下可以观察到的那样，FreeT　为我们提供了一种替代方案，可以将 state monad 委托给更强的等价机制，
       * 而不是在我们自己的 ADT 中模拟 State 运算
