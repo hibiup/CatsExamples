@@ -118,5 +118,11 @@ object
         assert(32 === st1)
         import cats.instances.string._
         assert("Result of step2: 42" === re1._2)  // 检查第二次运行的 result
+
+        /** 等价于： */
+        val (st2, re2) = step1.flatMap(r1 => step2.flatMap(r2 => step3.map{r3 =>
+            (r1, r2, r3)
+        })).run(20).value
+        println(st2, re2)
     }
 }
