@@ -9,14 +9,19 @@ object
  Example_17_Monad_State {
     def state_example(): Unit = {
         /**
+          * State Monad 是一个用于保存或传递状态（结果）值的范式
+          *
           * State 的定义如下：
           *
-             State[S, A]
+             State[S, A](f: S => (S, A))
           *
-          * 第一个参数是状态值 S，第二个是返回值的第二个要素 A。完整的返回值是 (S, A)
+          *   + 参数是状态转移函数，这个函数接受一个初始状态 S，返回值是新的状态 S 和可能对下一次状态转换产生影响的要素 A. 比如
+          * 随机数生成函数，每次生成的随机数是新的状态 S，而用于下次生成新随机数的种子就是 A。当然，如果每次转换都是独立的，
+          * 那么可以没有A值返回。或者 A 值也可以用于记录附加信息，例如日志信息等。
           *
-          * 和 Reader, Writer monad 类似，cats.data.State 是生成 State monad 的工厂类。传入一个满足类型参数的函数参数，返回一个
-          * Monad 实例，然后这个 Monad 实例在应用中接受工厂类传入的函数参数的参数值来进行运算。
+          *   + State Monad 是一个函数（monad）而不是 value（monoid），因此它本身并不存放状态，它只是用于状态计算，因此在使用
+          * 的时候是先定义（传入状态转换函数），然后得到 monad 实例，在使用的时候调用 monad 实例的 run 函数传入状态值，最后
+          * 通过 value 得到新的状态输出。
           * */
 
         /** 1）定义一个 State Monad，输入 Int 类型状态数据，返回 (Int, String) 。在这个例子中我们暂时不作状态转换，只介绍接口。*/
@@ -79,7 +84,10 @@ object
         assert((20, "Result: 10") === stateMonad5.run(10).value)  // 注意　modify 和 inspect 出现的顺序对结果的影响
     }
 
-    /** state monad 是设计用来做状态转换的，并且状态可以被传递。以下这个例子演示简单的状态转换和传递。*/
+    /**
+      * state monad 是设计用来做状态转换的，并且状态可以被传递。将多个 state monad 通过 flatMap 串联起来，前一个的输出 S 会
+      * 自动成为下一个的输入值，由此可以将状态透明传递下去。以下这个例子演示简单的状态转换和传递。
+      * */
     def state_composing_and_transforming(): Unit = {
         import cats.data.State
         /** 1) 定义  state monad */
@@ -106,10 +114,12 @@ object
           *   状态 s 将会被传递并累计运算，而每一次运算的结果 r1, r2. r3 会作为 tuple 赋值给最终的 state monad
           * */
         val steps = for {
-            r1 <- step1        // flatMap 或 map 将会获得 result
-            r2 <- step2        // 并且 state 值会被传递
-            r3 <- step3        // state:Int = (20+1)*2-10
-        } yield(r1, r2, r3)    // 将前几次的 result 全都返回。（当然也可以不返回任何结果）并和最终的 state 组装成新的 state monad: steps
+            r1 <- step1        // flatMap 或 map 将会显示获得 A,而S会被隐式传递到下一个 state monad
+            r2 <- step2        // step2 会隐式获得上一个输出的 S 值
+            r3 <- step3        // 最终 S 值运算：state:Int = (20+1)*2-10
+            /** 将前几次的 A值全都返回(以Tuple3的形式)。（当然如果不关心的话也可以不返，并不影响 state）并和最终
+              * 的 state 组装成新的 state monad: steps */
+        } yield(r1, r2, r3)
 
         /** 4) 执行 steps monad 给出初始状态并得到结果。（结果类型将会是 (Int, Tuple2[String, String， String]) ）*/
         val (st1, re1) = steps.run(20).value
@@ -119,7 +129,7 @@ object
         import cats.instances.string._
         assert("Result of step2: 42" === re1._2)  // 检查第二次运行的 result
 
-        /** 等价于： */
+        /** 等价于以下，注意 S 值是被隐式传递的，因此我们只需考虑 A 值是否需要被记录。 */
         val (st2, re2) = step1.flatMap(r1 => step2.flatMap(r2 => step3.map{r3 =>
             (r1, r2, r3)
         })).run(20).value
