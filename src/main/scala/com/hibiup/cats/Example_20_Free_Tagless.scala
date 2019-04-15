@@ -9,15 +9,12 @@ package Example_20_Free_Tagless {
     import com.typesafe.scalalogging.Logger
     import org.slf4j.LoggerFactory
 
-    package alg {
-        object types {
-            type InputType = Int
-            type InterType = BigDecimal
-            type OutputType = String
-        }
+    package design {
+        trait ALGs {
+            type InputType
+            type InterType
+            type OutputType
 
-        object ADTs {
-            import types._
 
             /** *************************************
               * 1) ADT
@@ -27,66 +24,64 @@ package Example_20_Free_Tagless {
             final case class F2S(f: InterType) extends Result[OutputType]
             final case class F2B(f: InterType) extends Result[OutputType]
 
+
             /** **************************************
               * 2) Lift
               * */
             type FreeResult[A] = Free[Result, A]
-        }
 
-        /** ************************************
-          * 3) 定义 DSL (代数)
-          * */
-        trait DSLs {
-            import ADTs._
-            import types._
 
+            /** ************************************
+              * 3) 定义 DSL
+              * */
             final private def i2f(i: InputType): FreeResult[InterType] = Free.liftF[Result, InterType](I2F(i))
             final private def f2s(f: InterType): FreeResult[OutputType] = Free.liftF[Result, OutputType](F2S(f))
             final private def f2b(f: InterType): FreeResult[OutputType] = Free.liftF[Result, OutputType](F2B(f))
 
-            implicit def isBoolean(s: InterType): InterTypeOps   // 需要实现一个特定抽象类型的运算，用隐式注入得到实例．
+            implicit def isBoolean(s: InterType): InterTypeOps   // 需要一个 type class 支持特定的，用隐式注入得到实例．
 
             /* Free 组合 */
             final def comp(i: InputType): FreeResult[OutputType] = for {
                 f <- i2f(i)
                 /** 在 for-comprehension 里实现逻辑分支. */
-                s <- if (f.canBeBoolean) f2b(f) else f2s(f)      // 使用特定类型的运算（隐式注入）
+                s <- if (f.canBeBoolean) f2b(f) else f2s(f)      // 使用 type class 支持运算（隐式注入）
             } yield s
-        }
 
-        // 特定抽象类型的运算接口
-        trait InterTypeOps {
-            def canBeBoolean: Boolean
-        }
 
-        /** *********************************************
-          * 4) Free router
-          *
-          * 业务逻辑解释器
-          * */
-        trait Compiler[M[_]] {
-            import ADTs._
-            import scala.language.higherKinds
+            /** *********************************************
+              * 4) Free router
+              * */
+            trait Compiler[M[_]] {
+                import scala.language.higherKinds
 
-            def apply[A](action: FreeResult[A])(implicit o:Interpreter[M], monad: Monad[M]): M[A] = action foldMap new (Result ~> M) {
+                // 需要一个业务逻辑解释器
+                def apply[A](action: FreeResult[A])(implicit o:Interpreter[M], monad: Monad[M]): M[A] =
                 // 将一个 Free Monad 映射到一个带有业务运算的函数
-                // 需要一个 Monad 实现 ResultT 数据类型的转换
-                override def apply[A](fa: Result[A]): M[A] = fa match {
-                    case I2F(i) => o.i2f(i).asInstanceOf[M[A]]
-                    case F2S(f) => o.f2s(f).asInstanceOf[M[A]]
-                    case F2B(f) => o.f2b(f).asInstanceOf[M[A]]
-                }
+                // 需要一个 Monad 实现 M(ResultContainer) 数据类型的装箱运算
+                    action foldMap new (Result ~> M) {
+                        override def apply[A](fa: Result[A]): M[A] = fa match {
+                            case I2F(i) => o.i2f(i).asInstanceOf[M[A]]
+                            case F2S(f) => o.f2s(f).asInstanceOf[M[A]]
+                            case F2B(f) => o.f2b(f).asInstanceOf[M[A]]
+                        }
+                    }
+            }
+
+            /**
+              * 业务逻辑解释器
+              * */
+            trait Interpreter[M[_]] {
+                def i2f(i: InputType): M[InterType]
+                def f2s(f: InterType): M[OutputType]
+                def f2b(f: InterType): M[OutputType]
+
+                final val compiler = new Compiler[M]{}
             }
         }
 
-        trait Interpreter[M[_]] {
-            import types._
-
-            def i2f(i: InputType): M[InterType]
-            def f2s(f: InterType): M[OutputType]
-            def f2b(f: InterType): M[OutputType]
-
-            final val compiler = new Compiler[M]{}
+        // 支持特定运算的 type class
+        trait InterTypeOps {
+            def canBeBoolean: Boolean
         }
     }
 
@@ -94,20 +89,35 @@ package Example_20_Free_Tagless {
       * 业务实现
       * */
     package implement {
-        import alg._
-        import types._
+        import design._
         import scala.concurrent.{ExecutionContextExecutor, Future}
 
+        /**
+          * 到实现的时候才定义返回值和容器的类型
+          */
         object Common {
-            /**
-              * 到实现的时候才定义返回值和容器的类型
-              */
             type Report = Vector[IO[Unit]]
             type λ[α] = WriterT[Future, Report, α]
             type ResultContainer[A] = EitherT[λ, Throwable, A]
         }
         import Common._
 
+
+        /** 实现时才定义所有的数据类型 */
+        object ALGs extends ALGs {
+            type InputType = Int
+            type InterType = BigDecimal
+            type OutputType = String
+
+            // 实现特定抽象类型的运算
+            override implicit def isBoolean(s: BigDecimal): InterTypeOps = new InterTypeOps {
+                override def canBeBoolean: Boolean = s >= 0 && s <= 1
+            }
+        }
+        import ALGs._
+
+
+        /** 实现对以上数据类型的业务逻辑 */
         object implicits {
             /*
              * 实现辅助 ResultContainer 运算的 Monad. Cats 和 Scalaz 提供了大部分基本的数据类型的 Monad，因此大部分情况下不需要自己实现．
@@ -139,69 +149,53 @@ package Example_20_Free_Tagless {
                 implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
                 val logger = Logger(LoggerFactory.getLogger(this.getClass))
 
-                override def i2f(i: InputType): ResultContainer[InterType] = {
-                    /**
-                      * 根据实现时的需要，实现返回值的装箱.
-                      **/
-                    EitherT {
-                        WriterT {
-                            Future {
-                                // 返回值（可以拆分出纯业务函数去实现）
-                                (
-                                        Vector(IO(logger.debug("i2f"))),
-                                        if (i >= 0) BigDecimal(i).asRight // 告知顶层的 EitherT 将这个值转载如 right
-                                        else new RuntimeException("Input is smaller then 0").asLeft
-                                )
-                            }
+                /**
+                  * 根据实现时的需要，实现返回值的装箱.
+                  **/
+                type ContentType[A] = (Report, Either[Throwable, A])
+                final private def assemble[A](content:ContentType[A]):ResultContainer[A] = EitherT {
+                    WriterT {
+                        Future {
+                            content
                         }
                     }
                 }
 
-                override def f2s(f: InterType): ResultContainer[OutputType] = {
-                    EitherT {
-                        WriterT {
-                            Future {
-                                (
-                                        Vector(IO(logger.debug("f2s"))),
-                                        f.toString.asRight
-                                )
-                            }
-                        }
-                    }
+                override def i2f(i: InputType): ResultContainer[InterType] = assemble[InterType] {
+                    // 返回值（可以拆分出纯业务函数去实现）
+                    (
+                        Vector(IO(logger.debug("i2f"))),
+                        if (i >= 0) BigDecimal(i).asRight // 告知顶层的 EitherT 将这个值转载如 right
+                        else new RuntimeException("Input is smaller then 0").asLeft
+                    )
                 }
 
-                override def f2b(f: InterType): ResultContainer[OutputType] = {
-                    EitherT {
-                        WriterT {
-                            Future {
-                                (
-                                        Vector(IO(logger.debug("f2b"))),
-                                        (if (f < 1) false else true).toString.asRight
-                                )
-                            }
-                        }
-                    }
+                override def f2s(f: InterType): ResultContainer[OutputType] = assemble[OutputType]{
+                    (
+                         Vector(IO(logger.debug("f2s"))),
+                         f.toString.asRight
+                    )
+                }
+
+                override def f2b(f: InterType): ResultContainer[OutputType] = assemble[OutputType]{
+                    (
+                        Vector(IO(logger.debug("f2b"))),
+                        (if (f < 1) false else true).toString.asRight
+                    )
                 }
             }
 
             implicit val compiler = BusinessInterpreter.compiler
         }
 
-        // 实现特定抽象类型的运算
-        object DSLs extends DSLs {
-            override implicit def isBoolean(s: InterType): InterTypeOps = new InterTypeOps {
-                override def canBeBoolean: Boolean = s >= 0 && s <= 1
-            }
-        }
 
         package app {
             /** ***************************************
               * 5) 使用
               * */
             object Client extends App {
-                import Common._
-                import DSLs._
-                import implicits._
+                import ALGs._          // 引进 DSL
+                import implicits._     // 引进实现
 
                 import scala.concurrent.Await
                 import scala.concurrent.duration.Duration
@@ -211,7 +205,7 @@ package Example_20_Free_Tagless {
 
                 def run: Unit = {
                     List(-1, 0, 1, 2).foreach { i =>
-                        val computation: ResultContainer[_] = c(comp(i)) // Call DSL
+                        val computation: ResultContainer[_] = c(comp(i))      // Call DSL
                         Await.result(computation.value.run, Duration.Inf) match {
                             case (logs, res) =>
                                 logs.foreach(_.unsafeRunSync())
@@ -222,6 +216,7 @@ package Example_20_Free_Tagless {
                         }
                     }
                 }
+
                 run
             }
         }
