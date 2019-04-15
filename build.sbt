@@ -1,7 +1,10 @@
-val catsVersion = "1.0.1"
+val catsVersion = "1.6.0"
 val catsEffectVersion = "1.2.0"
 val scalaTestVersion = "3.0.5"
 val specs2Version = "4.3.5"
+val logBackVersion = "1.2.3"
+val scalaLogging = "3.9.2"
+val catsTaglessVersion = "0.5"
 
 lazy val CatsExamples = (project in file(".")).
         settings(
@@ -17,7 +20,11 @@ lazy val CatsExamples = (project in file(".")).
                 "org.typelevel" %% "cats-core" % catsVersion,
                 "org.typelevel" %% "cats-free" % catsVersion,
                 "org.typelevel" %% "cats-effect" % catsEffectVersion,
-                "org.typelevel" %% "cats-mtl-core" % "0.2.1"
+                "org.typelevel" %% "cats-tagless-macros" % catsTaglessVersion,
+                "org.typelevel" %% "cats-tagless-legacy-macros" % catsTaglessVersion,
+                "org.typelevel" %% "cats-mtl-core" % "0.2.1",
+                "ch.qos.logback" % "logback-classic" % logBackVersion,
+                "com.typesafe.scala-logging" %% "scala-logging" % scalaLogging
             ),
             addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.1" cross CrossVersion.full),
             addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
