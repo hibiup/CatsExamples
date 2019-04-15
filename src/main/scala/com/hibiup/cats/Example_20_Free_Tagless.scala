@@ -11,6 +11,7 @@ package Example_20_Free_Tagless {
 
     package design {
         trait ALGs {
+            // 抽象类型
             type InputType
             type InterType
             type OutputType
@@ -50,6 +51,8 @@ package Example_20_Free_Tagless {
 
             /** *********************************************
               * 4) Free router
+              *
+              * 暂时不理会返回值的容器类型 M，将在实现时考虑
               * */
             trait Compiler[M[_]] {
                 import scala.language.higherKinds
@@ -79,7 +82,7 @@ package Example_20_Free_Tagless {
             }
         }
 
-        // 支持特定运算的 type class
+        // 支持抽象类型的 type class
         trait InterTypeOps {
             def canBeBoolean: Boolean
         }
@@ -89,18 +92,20 @@ package Example_20_Free_Tagless {
       * 业务实现
       * */
     package implement {
+
         import design._
         import scala.concurrent.{ExecutionContextExecutor, Future}
 
         /**
           * 到实现的时候才定义返回值和容器的类型
           */
-        object Common {
+        object types {
             type Report = Vector[IO[Unit]]
             type λ[α] = WriterT[Future, Report, α]
             type ResultContainer[A] = EitherT[λ, Throwable, A]
         }
-        import Common._
+
+        import types._
 
 
         /** 实现时才定义所有的数据类型 */
@@ -114,11 +119,13 @@ package Example_20_Free_Tagless {
                 override def canBeBoolean: Boolean = s >= 0 && s <= 1
             }
         }
+
         import ALGs._
 
 
         /** 实现对以上数据类型的业务逻辑 */
         object implicits {
+
             /*
              * 实现辅助 ResultContainer 运算的 Monad. Cats 和 Scalaz 提供了大部分基本的数据类型的 Monad，因此大部分情况下不需要自己实现．
              * */
@@ -153,7 +160,8 @@ package Example_20_Free_Tagless {
                   * 根据实现时的需要，实现返回值的装箱.
                   **/
                 type ContentType[A] = (Report, Either[Throwable, A])
-                final private def assemble[A](content:ContentType[A]):ResultContainer[A] = EitherT {
+
+                final private def assemble[A](content: ContentType[A]): ResultContainer[A] = EitherT {
                     WriterT {
                         Future {
                             content
@@ -164,61 +172,61 @@ package Example_20_Free_Tagless {
                 override def i2f(i: InputType): ResultContainer[InterType] = assemble[InterType] {
                     // 返回值（可以拆分出纯业务函数去实现）
                     (
-                        Vector(IO(logger.debug("i2f"))),
-                        if (i >= 0) BigDecimal(i).asRight // 告知顶层的 EitherT 将这个值转载如 right
-                        else new RuntimeException("Input is smaller then 0").asLeft
+                            Vector(IO(logger.debug("i2f"))),
+                            if (i >= 0) BigDecimal(i).asRight // 告知顶层的 EitherT 将这个值转载如 right
+                            else new RuntimeException("Input is smaller then 0").asLeft
                     )
                 }
 
-                override def f2s(f: InterType): ResultContainer[OutputType] = assemble[OutputType]{
+                override def f2s(f: InterType): ResultContainer[OutputType] = assemble[OutputType] {
                     (
-                         Vector(IO(logger.debug("f2s"))),
-                         f.toString.asRight
+                            Vector(IO(logger.debug("f2s"))),
+                            f.toString.asRight
                     )
                 }
 
-                override def f2b(f: InterType): ResultContainer[OutputType] = assemble[OutputType]{
+                override def f2b(f: InterType): ResultContainer[OutputType] = assemble[OutputType] {
                     (
-                        Vector(IO(logger.debug("f2b"))),
-                        (if (f < 1) false else true).toString.asRight
+                            Vector(IO(logger.debug("f2b"))),
+                            (if (f < 1) false else true).toString.asRight
                     )
                 }
             }
 
-            implicit val compiler = BusinessInterpreter.compiler
+            implicit val compiler:Compiler[ResultContainer] = BusinessInterpreter.compiler
         }
+    }
 
+    package app {
+        /** ***************************************
+          * 5) 使用
+          * */
+        object Client extends App {
+            import implement._
+            import types._
+            import ALGs._          // 引进 DSL
+            import implement.implicits._     // 引进实现
 
-        package app {
-            /** ***************************************
-              * 5) 使用
-              * */
-            object Client extends App {
-                import ALGs._          // 引进 DSL
-                import implicits._     // 引进实现
+            import scala.concurrent.Await
+            import scala.concurrent.duration.Duration
 
-                import scala.concurrent.Await
-                import scala.concurrent.duration.Duration
+            // import 某个实现
+            implicit val c = implicitly[Compiler[ResultContainer]]
 
-                // import 某个实现
-                implicit val c = implicitly[Compiler[ResultContainer]]
-
-                def run: Unit = {
-                    List(-1, 0, 1, 2).foreach { i =>
-                        val computation: ResultContainer[_] = c(comp(i))      // Call DSL
-                        Await.result(computation.value.run, Duration.Inf) match {
-                            case (logs, res) =>
-                                logs.foreach(_.unsafeRunSync())
-                                res match {
-                                    case Left(e: Throwable) => println(e.getMessage)
-                                    case Right(a) => println(a)
-                                }
-                        }
+            def run: Unit = {
+                List(-1, 0, 1, 2).foreach { i =>
+                    val computation: ResultContainer[_] = c(comp(i))      // Call DSL
+                    Await.result(computation.value.run, Duration.Inf) match {
+                        case (logs, res) =>
+                            logs.foreach(_.unsafeRunSync())
+                            res match {
+                                case Left(e: Throwable) => println(e.getMessage)
+                                case Right(a) => println(a)
+                            }
                     }
                 }
-
-                run
             }
+            run
         }
     }
 }
