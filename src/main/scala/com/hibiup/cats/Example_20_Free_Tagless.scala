@@ -1,226 +1,257 @@
 package com.hibiup.cats
 
-package Example_20_Free_Tagless {
-    import cats.data._
-    import cats.effect.IO
-    import cats.free.Free
-    import cats.{Monad, ~>}
-    import cats.implicits._
-    import com.typesafe.scalalogging.Logger
-    import org.slf4j.LoggerFactory
 
-    package design {
-        trait ALGs {    // 代数抽象
-        // 使用到的类型
-        type InputType
-            type InterType
-            type OutputType
+/**
+  * 如果同时存在两个 DSL 系统，例如：UserRepository　和 EmailService, 比较 Free 和 Tagless 的不同:
+  *
+  * https://softwaremill.com/free-tagless-compared-how-not-to-commit-to-monad-too-early/
+  */
 
+package Example_22_Tagless {
 
-            /** *************************************
-              * 1) ADT
-              * */
-            trait Result[+A]
-            final case class I2F(i: InputType) extends Result[InterType]
-            final case class F2S(f: InterType) extends Result[OutputType]
-            final case class F2B(f: InterType) extends Result[OutputType]
+    import java.util.UUID
 
+    import scala.concurrent.{Await, Future}
+    import scala.concurrent.duration._
 
-            /** **************************************
-              * 2) Free Lift
-              * */
-            type FreeResult[A] = Free[Result, A]
+    /**
+      * Free version
+      *
+      * Free 是基于 ADT 工作的，因此要在设计时定义出 Coproduct 和 Product.
+      */
+    package FreeVersion {
 
+        trait design {
+            import cats.free.Free
 
-            /** ************************************
-              * 3) 定义 DSL
-              * */
-            final private def i2f(i: InputType): FreeResult[InterType] = Free.liftF[Result, InterType](I2F(i))
-            final private def f2s(f: InterType): FreeResult[OutputType] = Free.liftF[Result, OutputType](F2S(f))
-            final private def f2b(f: InterType): FreeResult[OutputType] = Free.liftF[Result, OutputType](F2B(f))
+            implicit val ec = scala.concurrent.ExecutionContext.global
 
-            implicit def isBoolean(s: InterType): InterTypeOps   // 需要一个 type class 支持特定的条件运算，用隐式注入得到实例．
+            // Types
+            type Point
+            type ID
+            type User
 
-            /* Free 组合 */
-            final def comp(i: InputType): FreeResult[OutputType] = for {
-                f <- i2f(i)
-                /** 在 for-comprehension 里实现逻辑分支. */
-                s <- if (f.canBeBoolean) f2b(f) else f2s(f)      // 使用 type class 支持运算（隐式注入）
-            } yield s
+            /** 需要预先设计 Coproduct */
+            // ADT for UserRepository
+            sealed trait UserRepository[+T]
+            /** 以下 SendEmail 要和 FindUser 等工作在一起，也必须继承自 UserRepository */
+            // ADT for EmailService
+            // sealed trait EmailService[+T]   /** 无法使用 */
+            /** 除非使用 Coproduct 结构作为两者的超集, 并将之作为共同的容器.(Coproduct 是 Cats 的 Either) */
+            // type UserAndEmailAlg[T] = Coproduct[UserRepository[T], EmailService[T], T]
 
+            // Free for UserRepository
+            type UserRepositoryFree[T] = Free[UserRepository, T]
+            // Free for EmailService  /** 无法使用 */
+            // type EmailServiceFree[T] = Free[EmailService, T]
 
-            /** *********************************************
-              * 4) Free 路由
-              *
-              * 暂时不理会返回值的容器类型 M，将在实现时考虑
-              * */
-            trait Compiler[M[_]] {
-                import scala.language.higherKinds
+            // Case class for User
+            final case class FindUser(id: ID) extends UserRepository[Option[User]]
+            final case class UpdateUser(u: User) extends UserRepository[Unit]
+            // Case class for Email
+            final case class SendEmail(email: String, subject: String, body: String) extends UserRepository[Unit]
 
-                // 需要一个业务逻辑解释器
-                def apply[A](action: FreeResult[A])(implicit o:Interpreter[M], monad: Monad[M]): M[A] =
-                // 将一个 Free Monad 映射到一个带有业务运算的函数
-                // 需要一个 Monad 实现 M(ResultContainer) 数据类型的装箱运算
-                    action foldMap new (Result ~> M) {
-                        override def apply[A](fa: Result[A]): M[A] = fa match {
-                            case I2F(i) => o.i2f(i).asInstanceOf[M[A]]
-                            case F2S(f) => o.f2s(f).asInstanceOf[M[A]]
-                            case F2B(f) => o.f2b(f).asInstanceOf[M[A]]
-                        }
-                    }
-            }
+            // Free for User
+            def findUser(id: ID): UserRepositoryFree[Option[User]] = Free.liftF(FindUser(id))
+            def updateUser(u: User): UserRepositoryFree[Unit] = Free.liftF(UpdateUser(u))
+            // Free for Email
+            def sendEmail(email: String, subject: String, body: String): UserRepositoryFree[Unit] =Free.liftF(SendEmail(email, subject, body))
 
-            /**
-              * 业务逻辑解释器
-              * */
-            trait Interpreter[M[_]] {
-                def i2f(i: InputType): M[InterType]
-                def f2s(f: InterType): M[OutputType]
-                def f2b(f: InterType): M[OutputType]
-
-                final val compiler = new Compiler[M]{}
-            }
-        }
-
-        // 支持抽象类型的 type class
-        trait InterTypeOps {
-            def canBeBoolean: Boolean
-        }
-    }
-
-    /****************************************************
-      * 业务实现
-      * */
-    package implement {
-        import design._
-        import scala.concurrent.{ExecutionContextExecutor, Future}
-
-        /**
-          * 到实现的时候才定义返回值和容器的类型
-          */
-        object types {
-            type Report = Vector[IO[Unit]]
-            type λ[α] = WriterT[Future, Report, α]
-            type ResultContainer[A] = EitherT[λ, Throwable, A]
-        }
-        import types._
-
-
-        /** 实现时才具体化所有用到的数据类型 */
-        object ALGs extends ALGs {
-            type InputType = Int
-            type InterType = BigDecimal
-            type OutputType = String
-
-            // 实现隐式 type class, 支持对 InterType(BigDecimal) 的条件运算
-            override implicit def isBoolean(s: BigDecimal): InterTypeOps = new InterTypeOps {
-                override def canBeBoolean: Boolean = s >= 0 && s <= 1
-            }
-        }
-        import ALGs._
-
-
-        /** 实现对以上数据类型的业务逻辑 */
-        object implicits {
             /*
-             * 实现辅助 ResultContainer 运算的 Monad.
-             * Cats 和 Scalaz 提供了大部分基本的数据类型的 Monad，因此大部分情况下不需要自己实现．
-             * */
-            implicit object ResultMonad extends Monad[ResultContainer] {
-                implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
-                val logger = Logger(LoggerFactory.getLogger(this.getClass))
-
-                override def flatMap[A, B](fa: ResultContainer[A])(f: A => ResultContainer[B]): ResultContainer[B] = fa flatMap { a => f(a) }
-
-                override def tailRecM[A, B](a: A)(f: A => ResultContainer[Either[A, B]]): ResultContainer[B] = flatMap(f(a)) {
-                    case Left(e) => tailRecM(e)(f)
-                    case Right(b) => pure(b)
-                }
-
-                override def pure[A](x: A): ResultContainer[A] = EitherT {
-                    WriterT {
-                        Future {
-                            (Vector.empty, x.asRight)
-                        }
-                    }
+             * Free Composite (DSL)
+             */
+            def addPoints(userId: ID, pointsToAdd: Point): UserRepositoryFree[Either[String, Unit]] = {
+                // Free.flatMap　取出　FindUser(id)
+                findUser(userId).flatMap {
+                    case None =>
+                        Free.pure(Left("User not found"))              // 装箱回去 Free
+                    case Some(user) =>
+                        val updated = user.copyPoint(pointsToAdd)
+                        for {
+                            _ <- updateUser(updated) //.left
+                            /** sendEmail 的返回类型要和 updateUser 对齐：*/
+                            _ <- sendEmail(user.email, "Points added!", s"You now have ${updated.loyaltyPoints}") //.right
+                        } yield Right(())
                 }
             }
+
+            // Type class for User.copy
+            trait UserOps {
+                def copyPoint(p: Point): User
+                def email:String
+                def loyaltyPoints:Point
+            }
+
+            implicit def CopyUser(s: User): UserOps
+        }
+
+        object implement {
+            import cats.{~>}
+
+            // 具体化类型
+            object Design extends design {
+                type Point = Int
+                type ID = UUID
+                case class USER(id: ID, email: String, loyaltyPoints: Point)
+                type User = USER
+
+                override implicit def CopyUser(s: USER): Design.UserOps = new UserOps {
+                    override def copyPoint(p: Int): USER = s.copy(loyaltyPoints = s.loyaltyPoints + p)
+                    override def email: String = s.email
+                    override def loyaltyPoints: Int = s.loyaltyPoints
+                }
+            }
+
+            import Design._
 
             /**
-              * 实现业务运算（解释器）
-              **/
-            implicit object BusinessInterpreter extends Interpreter[ResultContainer] {
-                implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
-                val logger = Logger(LoggerFactory.getLogger(this.getClass))
-
-                /**
-                  * 根据返回值容器实现对返回值的装箱.
-                  **/
-                type ContentType[A] = (Report, Either[Throwable, A])
-
-                final private def assemble[A](content: ContentType[A]): ResultContainer[A] = EitherT {
-                    WriterT {
-                        Future {
-                            content
-                        }
-                    }
-                }
-
-                // 实现业务方法
-                override def i2f(i: InputType): ResultContainer[InterType] = assemble[InterType] {
-                    // 返回值（可以进一步拆分出纯业务函数去实现）
-                    (
-                            Vector(IO(logger.debug("i2f"))),
-                            if (i >= 0) BigDecimal(i).asRight // 告知顶层的 EitherT 将这个值转载如 right
-                            else new RuntimeException("Input is smaller then 0").asLeft
-                    )
-                }
-
-                override def f2s(f: InterType): ResultContainer[OutputType] = assemble[OutputType] {
-                    (
-                            Vector(IO(logger.debug("f2s"))),
-                            f.toString.asRight
-                    )
-                }
-
-                override def f2b(f: InterType): ResultContainer[OutputType] = assemble[OutputType] {
-                    (
-                            Vector(IO(logger.debug("f2b"))),
-                            (if (f < 1) false else true).toString.asRight
-                    )
+              * 实现业务逻辑
+              * */
+            // Free router + interpreter (返回容器是 Future)
+            val interpreter: UserRepository ~> Future = new (UserRepository ~> Future) {
+                override def apply[A](fa: UserRepository[A]): Future[A] = fa match {
+                    case FindUser(id) =>
+                        Future.successful(None).asInstanceOf[Future[A]]
+                    case UpdateUser(u) =>
+                        Future.successful(()).asInstanceOf[Future[A]]
                 }
             }
+        }
 
-            implicit val compiler:Compiler[ResultContainer] = BusinessInterpreter.compiler
+        /** 使用 */
+        object Client extends App {
+            import cats.implicits._
+            import implement._
+            import Design._
+
+            val result: Future[Either[String, Unit]] =
+                /**
+                  * addPoints 返回 Free　然后交给　interpreter　去执行业务解释．
+                  *
+                  * 呼叫过程： Free -> Interpreter
+                  * */
+                addPoints(UUID.randomUUID(), 10).foldMap(interpreter)
+
+            println(Await.result(result, Duration.Inf))
         }
     }
 
-    /** ***************************************
-      * 5) 使用时
+    /**
+      * Tagless version
+      *
+      * 设计时不定义 Coproduct, 而是由实现时给出，但是没有 Free 支持
       * */
-    package app {
-        import implement._
-        import types._
-        import implement.implicits._     // 引进实现
+    package TaglessVersion {
+        import cats._
+        import cats.implicits._
 
-        object Client extends App {
-            import scala.concurrent.Await
-            import scala.concurrent.duration.Duration
+        trait design {
+            type ID
+            type User
+            type Point
 
-            import ALGs._                                            // 引进 DSL 和业务解释器
-            implicit val c = implicitly[Compiler[ResultContainer]]   // 得到注入的 Free 路由
+            /**
+              * Tagless for UserRepository
+              *
+              * Coproduct 在实现时提供
+              * */
+            trait UserRepository[F[_]] {
+                def findUser(id: ID): F[Option[User]]
+                def updateUser(u: User): F[Unit]
+            }
 
-            List(-1, 0, 1, 2).foreach { i =>
-                val computation: ResultContainer[_] = c(comp(i))      // Call DSL
-                Await.result(computation.value.run, Duration.Inf) match {
-                    case (logs, res) =>
-                        logs.foreach(_.unsafeRunSync())
-                        res match {
-                            case Left(e: Throwable) => println(e.getMessage)
-                            case Right(a) => println(a)
-                        }
+            /**
+              * Tagless for Email
+              * */
+            trait EmailService[F[_]] {
+                def sendEmail(email: String, subject: String, body: String): F[Unit]
+            }
+
+            /** Composite (DSL) */
+            def addPoints[F[_]: Monad](userId: ID, pointsToAdd: Point)
+                                      /** 实现时为参数 UserRepository 和 EmailService 提供相同的容器 F */
+                                      (implicit ur: UserRepository[F], es:EmailService[F]): F[Either[String, Unit]] = {
+                ur.findUser(userId).flatMap {
+                    case None =>
+                        implicitly[Monad[F]].pure(Left("User not found"))
+                    case Some(user) =>
+                        val updated = user.copyPoint(pointsToAdd)
+                        for {
+                            _ <- ur.updateUser(updated)
+                            /** 设计时不必考虑类型对齐 */
+                            _ <- es.sendEmail(user.email, "Points added!",
+                                s"You now have ${updated.loyaltyPoints}")
+                        } yield Right(())
+                }
+            }
+
+            // Type class for User.copy
+            trait UserOps {
+                def copyPoint(p: Point): User
+                def email:String
+                def loyaltyPoints:Point
+            }
+
+            implicit def CopyUser(s: User): UserOps
+        }
+
+        object implement {
+            object Design extends design{
+                type Point = Int
+                type ID = UUID
+                case class USER(id: ID, email: String, loyaltyPoints: Point)
+                type User = USER
+
+                override implicit def CopyUser(s: USER): Design.UserOps = new UserOps {
+                    override def copyPoint(p: Int): USER = s.copy(loyaltyPoints = s.loyaltyPoints + p)
+                    override def email: String = s.email
+                    override def loyaltyPoints: Int = s.loyaltyPoints
+                }
+            }
+            import Design._
+
+            /** Implement tagless */
+            import scala.concurrent._
+
+            /**
+              * 实现业务逻辑
+              *
+              * 为　addPoints　提供 UserRepository 和 EmailService 参数
+              * */
+            implicit val userRepo = new UserRepository[Future] {
+                override def findUser(id: UUID): Future[Option[USER]] = Future.successful(None)
+                override def updateUser(u: USER): Future[Unit] = Future.successful(())
+            }
+
+            implicit val emailService = new EmailService[Future] {
+                override def sendEmail(email: String, subject: String, body: String): Future[Unit] = Future.successful{
+                    s"Sending email for $email with subject: $subject"
                 }
             }
         }
+
+        /** 使用 */
+        object Client extends App {
+            import implement._
+            import Design._
+
+            import cats.instances.future._
+            import scala.concurrent.ExecutionContext.Implicits.global
+
+            val result: Future[Either[String, Unit]] =
+                /**
+                  * 呼叫过程：FutureMonad -> (implicit)UserRepository
+                  * */
+                addPoints[Future](UUID.randomUUID(), 10)
+
+            println(Await.result(result, Duration.Inf))
+        }
+    }
+
+    /**
+      * Free + Tagless 的版本，同时获得 Tagless 和 Free 的优点.
+      * */
+    package FreeAndTagless {
+
     }
 }

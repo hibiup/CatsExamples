@@ -20,8 +20,9 @@ lazy val CatsExamples = (project in file(".")).
                 "org.typelevel" %% "cats-core" % catsVersion,
                 "org.typelevel" %% "cats-free" % catsVersion,
                 "org.typelevel" %% "cats-effect" % catsEffectVersion,
+                "org.typelevel" %% "cats-tagless-core" % catsTaglessVersion,
                 "org.typelevel" %% "cats-tagless-macros" % catsTaglessVersion,
-                "org.typelevel" %% "cats-tagless-legacy-macros" % catsTaglessVersion,
+                //"org.typelevel" %% "cats-tagless-legacy-macros" % catsTaglessVersion,
                 "org.typelevel" %% "cats-mtl-core" % "0.2.1",
                 "ch.qos.logback" % "logback-classic" % logBackVersion,
                 "com.typesafe.scala-logging" %% "scala-logging" % scalaLogging
