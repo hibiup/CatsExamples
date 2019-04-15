@@ -10,14 +10,22 @@ package Example_20_Free_Tagless {
     import org.slf4j.LoggerFactory
 
     package alg {
+        object types {
+            type InputType = Int
+            type InterType = BigDecimal
+            type OutputType = String
+        }
+
         object ADTs {
+            import types._
+
             /** *************************************
               * 1) ADT
               * */
             trait Result[+A]
-            final case class I2F(i: Int) extends Result[BigDecimal]
-            final case class F2S(f: BigDecimal) extends Result[String]
-            final case class F2B(f: BigDecimal) extends Result[String]
+            final case class I2F(i: InputType) extends Result[InterType]
+            final case class F2S(f: InterType) extends Result[OutputType]
+            final case class F2B(f: InterType) extends Result[OutputType]
 
             /** **************************************
               * 2) Lift
@@ -30,18 +38,19 @@ package Example_20_Free_Tagless {
           * */
         trait DSLs {
             import ADTs._
+            import types._
 
-            final private def i2f(i: Int): FreeResult[BigDecimal] = Free.liftF[Result, BigDecimal](I2F(i))
-            final private def f2s(f: BigDecimal): FreeResult[String] = Free.liftF[Result, String](F2S(f))
-            final private def f2b(f: BigDecimal): FreeResult[String] = Free.liftF[Result, String](F2B(f))
+            final private def i2f(i: InputType): FreeResult[InterType] = Free.liftF[Result, InterType](I2F(i))
+            final private def f2s(f: InterType): FreeResult[OutputType] = Free.liftF[Result, OutputType](F2S(f))
+            final private def f2b(f: InterType): FreeResult[OutputType] = Free.liftF[Result, OutputType](F2B(f))
 
-            implicit def isBoolean(s: BigDecimal): InterTypeOps   // 需要实现一个特定抽象类型的运算，用隐式注入得到实例．
+            implicit def isBoolean(s: InterType): InterTypeOps   // 需要实现一个特定抽象类型的运算，用隐式注入得到实例．
 
             /* Free 组合 */
-            final def comp(i: Int): FreeResult[String] = for {
+            final def comp(i: InputType): FreeResult[OutputType] = for {
                 f <- i2f(i)
                 /** 在 for-comprehension 里实现逻辑分支. */
-                s <- if (f.canBeBoolean) f2b(f) else f2s(f)    // 使用特定类型的运算（隐式注入）
+                s <- if (f.canBeBoolean) f2b(f) else f2s(f)      // 使用特定类型的运算（隐式注入）
             } yield s
         }
 
@@ -59,8 +68,7 @@ package Example_20_Free_Tagless {
             import ADTs._
             import scala.language.higherKinds
 
-            def apply[A](action: FreeResult[A])(implicit o:Interpreter[M], monad: Monad[M]): M[A] = action.foldMap(
-                new (Result ~> M) {
+            def apply[A](action: FreeResult[A])(implicit o:Interpreter[M], monad: Monad[M]): M[A] = action foldMap new (Result ~> M) {
                 // 将一个 Free Monad 映射到一个带有业务运算的函数
                 // 需要一个 Monad 实现 ResultT 数据类型的转换
                 override def apply[A](fa: Result[A]): M[A] = fa match {
@@ -68,13 +76,15 @@ package Example_20_Free_Tagless {
                     case F2S(f) => o.f2s(f).asInstanceOf[M[A]]
                     case F2B(f) => o.f2b(f).asInstanceOf[M[A]]
                 }
-            })
+            }
         }
 
         trait Interpreter[M[_]] {
-            def i2f(i: Int): M[BigDecimal]
-            def f2s(f: BigDecimal): M[String]
-            def f2b(f: BigDecimal): M[String]
+            import types._
+
+            def i2f(i: InputType): M[InterType]
+            def f2s(f: InterType): M[OutputType]
+            def f2b(f: InterType): M[OutputType]
 
             final val compiler = new Compiler[M]{}
         }
@@ -85,6 +95,7 @@ package Example_20_Free_Tagless {
       * */
     package implement {
         import alg._
+        import types._
         import scala.concurrent.{ExecutionContextExecutor, Future}
 
         object Common {
@@ -128,7 +139,7 @@ package Example_20_Free_Tagless {
                 implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
                 val logger = Logger(LoggerFactory.getLogger(this.getClass))
 
-                override def i2f(i: Int): ResultContainer[BigDecimal] = {
+                override def i2f(i: InputType): ResultContainer[InterType] = {
                     /**
                       * 根据实现时的需要，实现返回值的装箱.
                       **/
@@ -146,7 +157,7 @@ package Example_20_Free_Tagless {
                     }
                 }
 
-                override def f2s(f: BigDecimal): ResultContainer[String] = {
+                override def f2s(f: InterType): ResultContainer[OutputType] = {
                     EitherT {
                         WriterT {
                             Future {
@@ -159,7 +170,7 @@ package Example_20_Free_Tagless {
                     }
                 }
 
-                override def f2b(f: BigDecimal): ResultContainer[String] = {
+                override def f2b(f: InterType): ResultContainer[OutputType] = {
                     EitherT {
                         WriterT {
                             Future {
@@ -178,7 +189,7 @@ package Example_20_Free_Tagless {
 
         // 实现特定抽象类型的运算
         object DSLs extends DSLs {
-            override implicit def isBoolean(s: BigDecimal): InterTypeOps = new InterTypeOps {
+            override implicit def isBoolean(s: InterType): InterTypeOps = new InterTypeOps {
                 override def canBeBoolean: Boolean = s >= 0 && s <= 1
             }
         }
