@@ -233,6 +233,7 @@ package Example_20_Free_Tagless {
             import cats.free.Free
             import cats.{Monad, ~>}
             import cats.tagless.{autoFunctorK, finalAlg}
+            import simulacrum.typeclass
 
             trait Alg { // 代数抽象
                 // 使用到的类型
@@ -251,7 +252,8 @@ package Example_20_Free_Tagless {
                     def f2b(f: InterType): F[OutputType]
                 }
 
-                /* // 伴随类由 @finalAlg 自动生成, 如果要消除使用时 “import Result.autoDerive._” 误报, 也可以显示添加。
+                /*
+                // 伴随类由 @finalAlg 自动生成, 如果要消除使用时 “import Result.autoDerive._” 误报, 也可以显示添加。
                 object Result {
                     def apply[F[_]](implicit inst: Result[F]): Result[F] = inst
                 }
@@ -261,7 +263,8 @@ package Example_20_Free_Tagless {
                   * 3) 定义 DSL
                   * */
 
-                implicit def isBoolean(s: InterType): InterTypeOps // 需要一个 type class 支持特定的条件运算，用隐式注入得到实例．
+                // 需要一个 type class 支持特定的条件运算，用隐式注入得到实例．
+                implicit def isBoolean(s: InterType): InterTypeOps[InterType]
 
                 /* Free 组合 */
                 final def comp[F[_]: Monad: DSL](i: InputType): F[OutputType] = for {
@@ -274,7 +277,7 @@ package Example_20_Free_Tagless {
             }
 
             // 支持抽象类型的 type class
-            trait InterTypeOps {
+            @typeclass trait InterTypeOps[A] { self =>
                 def canBeBoolean: Boolean
             }
         }
@@ -286,15 +289,30 @@ package Example_20_Free_Tagless {
         package implement {
             import design._
 
-            import scala.concurrent.{ExecutionContextExecutor, Future}
+            import scala.concurrent.Future
 
             /**
               * 到实现的时候才定义返回值和容器的类型
               */
             object types {
+                implicit val ec = scala.concurrent.ExecutionContext.global
+
+                /** 设计返回值容器 */
                 type Report = Vector[IO[Unit]]
                 type λ[α] = WriterT[Future, Report, α]
                 type ResultContainer[A] = EitherT[λ, Throwable, A]
+
+                /** 对于复杂的返回值容器，可以同时定义一个打包方法，以便于 Interpreter 将结果打包.*/
+                type ContentType[A] = (Report, Either[Throwable, A])
+                implicit class ResultWrapper[A](content: ContentType[A]) {
+                    def assemble: ResultContainer[A] = EitherT {
+                        WriterT {
+                            Future {
+                                content
+                            }
+                        }
+                    }
+                }
             }
 
             import types._
@@ -306,7 +324,7 @@ package Example_20_Free_Tagless {
                 type OutputType = String
 
                 // 实现隐式 type class, 支持对 InterType(BigDecimal) 的条件运算
-                override implicit def isBoolean(s: BigDecimal): InterTypeOps = new InterTypeOps {
+                implicit def isBoolean(s: InterType): InterTypeOps[InterType] = new InterTypeOps[InterType] {
                     override def canBeBoolean: Boolean = s >= 0 && s <= 1
                 }
             }
@@ -315,41 +333,39 @@ package Example_20_Free_Tagless {
 
             /** 实现对以上数据类型的业务逻辑 */
             object implicits {
-                implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
+                //implicit val ec = scala.concurrent.ExecutionContext.global
                 val logger = Logger(LoggerFactory.getLogger(this.getClass))
 
                 /*
                  * Monad[ResultContainer] 是没必要的,因为 ResultContainer[A] = EitherT[...] 本身就是 Monad,
                  * 如果是定制类,需要实现 Monad[F] 接口. 参见上例.
                  *
-                  implicit object ResultMonad extends Monad[ResultContainer] {}
-                */
+                 *    implicit object ResultMonad extends Monad[ResultContainer] {}
+                 */
 
-                /* 实现业务逻辑 */
+                /** 实现业务逻辑 */
                 implicit object Interpreter extends DSL[ResultContainer] {
-                    def i2f(i: InputType): ResultContainer[InterType] = assemble[InterType] {
+                    def i2f(i: InputType): ResultContainer[InterType] =
                         // 返回值（可以进一步拆分出纯业务函数去实现）
                         (
-                                Vector(IO(logger.debug("i2f"))),
-                                if (i >= 0) BigDecimal(i).asRight // 告知顶层的 EitherT 将这个值转载如 right
+                                Vector(IO(logger.debug(s"[Thread-${Thread.currentThread.getId}] - i2f"))),
+                                if (i >= 0) BigDecimal(i).asRight      // 告知顶层的 EitherT 将这个值转载如 right
                                 else new RuntimeException("Input is smaller then 0").asLeft
-                        )
-                    }
+                        ).assemble    // 调用隐式注入的打包方法打包结果
 
-                    def f2s(f: InterType): ResultContainer[OutputType] = assemble[OutputType] {
+                    def f2s(f: InterType): ResultContainer[OutputType] =
                         (
-                                Vector(IO(logger.debug("f2s"))),
+                                Vector(IO(logger.debug(s"[Thread-${Thread.currentThread.getId}] - f2s"))),
                                 f.toString.asRight
-                        )
-                    }
+                        ).assemble
 
-                    def f2b(f: InterType): ResultContainer[OutputType] = assemble[OutputType] {
+                    def f2b(f: InterType): ResultContainer[OutputType] =
                         (
-                                Vector(IO(logger.debug("f2b"))),
+                                Vector(IO(logger.debug(s"[Thread-${Thread.currentThread.getId}] - f2b"))),
                                 (if (f < 1) false else true).toString.asRight
-                        )
-                    }
+                        ).assemble
 
+                    /* 将打包方法移到外面去隐式植入
                     type ContentType[A] = (Report, Either[Throwable, A])
                     final private def assemble[A](content: ContentType[A]): ResultContainer[A] = EitherT {
                         WriterT {
@@ -358,6 +374,7 @@ package Example_20_Free_Tagless {
                             }
                         }
                     }
+                    */
                 }
             }
         }
@@ -380,8 +397,21 @@ package Example_20_Free_Tagless {
                 import Alg.DSL._ // 引进 DSL
                 import DSL.autoDerive._
 
+                // Free
                 List(-1, 0, 1, 2).foreach { i =>
                     Await.result(comp[Free[ResultContainer, ?]](i).foldMap(FunctionK.id).value.run, Duration.Inf) match {
+                        case (logs, res) =>
+                            logs.foreach(_.unsafeRunSync())
+                            res match {
+                                case Left(e: Throwable) => println(e.getMessage)
+                                case Right(a) => println(a)
+                            }
+                    }
+                }
+
+                // None Free
+                List(-1, 0, 1, 2).foreach { i =>
+                    Await.result(comp[ResultContainer](i).value.run, Duration.Inf) match {
                         case (logs, res) =>
                             logs.foreach(_.unsafeRunSync())
                             res match {
