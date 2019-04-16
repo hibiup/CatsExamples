@@ -15,7 +15,7 @@ package Example_22_Tagless {
     import scala.concurrent.duration._
 
     /**
-      * Free version
+      * 例一）Free version
       *
       * Free 是基于 ADT 工作的，因此要在设计时定义出 Coproduct 和 Product.
       */
@@ -136,8 +136,9 @@ package Example_22_Tagless {
         }
     }
 
+
     /**
-      * Tagless version
+      * 例二）Tagless version
       *
       * 设计时不定义 Coproduct, 而是由实现时给出，但是没有 Free 支持
       * */
@@ -192,7 +193,7 @@ package Example_22_Tagless {
                 def loyaltyPoints:Point
             }
 
-            implicit def CopyUser(s: User): UserOps
+            implicit def UserOps(s: User): UserOps
         }
 
         object implement {
@@ -243,15 +244,100 @@ package Example_22_Tagless {
                   * 呼叫过程：FutureMonad -> (implicit)UserRepository
                   * */
                 addPoints[Future](UUID.randomUUID(), 10)
-
             println(Await.result(result, Duration.Inf))
         }
     }
 
+
     /**
-      * Free + Tagless 的版本，同时获得 Tagless 和 Free 的优点.
+      * 例三）一个简单的，没有应用 Free 的 Cats-Tagless
+      * */
+    package aSimpleTaglessExample {
+        import scala.util.Try
+        import cats.tagless._
+
+        object TaglessExample extends App{
+            @finalAlg
+            @autoFunctorK(true)trait ExpressionAlg[F[_]] {
+                def num(i: String): F[Float]
+                def divide(dividend: Float, divisor: Float): F[Float]
+            }
+
+            /*　// @finalAlg 会自动生成伴随对象
+            object ExpressionAlg {
+                def apply[F[_]](implicit inst: ExpressionAlg[F]): ExpressionAlg[F] = inst
+            }
+            */
+
+            implicit object tryExpression extends ExpressionAlg[Try] {
+                def num(i: String) = Try(i.toFloat)
+                def divide(dividend: Float, divisor: Float) = Try(dividend / divisor)
+            }
+
+            // idea 因为找不到伴随对象误报错
+            import ExpressionAlg.autoDerive._
+
+            ExpressionAlg[Try].num("2").foreach(println)
+            ExpressionAlg[Try].divide(3, 2)
+        }
+    }
+
+    /**
+      * 例四）Cats Free + Tagless 的版本，同时获得 Tagless 和 Free 的优点.
+      *
+      * https://typelevel.org/cats-tagless/
       * */
     package FreeAndTagless {
+        import cats._
+        import cats.arrow.FunctionK
+        import cats.free.Free
+        import cats.implicits._
+        import cats.tagless._
 
+        import scala.util.Try
+
+        object design {
+            @finalAlg
+            @autoFunctorK(true)
+            trait Increment[F[_]] {
+                def plusOne(i: Int): F[Int]
+            }
+
+            /* // @finalAlg 会自动生成伴随对象
+            object Increment {
+                def apply[F[_]](implicit inst: Increment[F]): Increment[F] = inst
+            }
+            */
+
+            def program[F[_]: Monad: Increment](i: Int): F[Int] = for {  // [F[_]: Monad: Increment] == Increment[Monad[F[_]]]
+                j <- Increment[F].plusOne(i)
+                z <- if (j < 10000) program[F](j) else Monad[F].pure(j)
+            } yield z
+        }
+
+        object implement {
+            import design._
+
+            /** 如果　Cats-tagless 发现存在隐式 F ~> Free[F, ?] 和  Increment[F] 结构，就会自动为 Increment[Free[F, ?]]
+              * 派生出 Free 结构 */
+            implicit def toFree[F[_]]: F ~> Free[F, ?] = λ[F ~> Free[F, ?]](t => Free.liftF(t))
+
+            implicit object incTry extends Increment[Try] {
+                def plusOne(i: Int) = Try(i + 1)
+            }
+        }
+
+        object client extends App {
+            import implement._
+            import design._
+            import design.Increment
+
+            // idea 因为找不到伴随对象误报错
+            import Increment.autoDerive._
+
+            //program[Try](1)   // Unsafe
+            /** 因为存在 implicit F ~> Free[F, ?] 和 Increment[Try]，以下会被解析成 Free 结构．*/
+            program[Free[Try, ?]](0).foldMap(FunctionK.id).foreach(println)    //It's Free
+        }
     }
 }

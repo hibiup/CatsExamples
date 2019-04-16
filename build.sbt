@@ -20,14 +20,14 @@ lazy val CatsExamples = (project in file(".")).
                 "org.typelevel" %% "cats-core" % catsVersion,
                 "org.typelevel" %% "cats-free" % catsVersion,
                 "org.typelevel" %% "cats-effect" % catsEffectVersion,
-                "org.typelevel" %% "cats-tagless-core" % catsTaglessVersion,
                 "org.typelevel" %% "cats-tagless-macros" % catsTaglessVersion,
-                //"org.typelevel" %% "cats-tagless-legacy-macros" % catsTaglessVersion,
+                "org.typelevel" %% "cats-tagless-legacy-macros" % catsTaglessVersion,
                 "org.typelevel" %% "cats-mtl-core" % "0.2.1",
                 "ch.qos.logback" % "logback-classic" % logBackVersion,
                 "com.typesafe.scala-logging" %% "scala-logging" % scalaLogging
             ),
-            addCompilerPlugin("org.scalamacros" %% "paradise" % "2.1.1" cross CrossVersion.full),
+            //addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
+            addCompilerPlugin("org.scalameta" %% "paradise" % "3.0.0-M11" cross CrossVersion.full),
             addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.4"),
             scalacOptions ++= Seq(
                 "-Xplugin-require:macroparadise",

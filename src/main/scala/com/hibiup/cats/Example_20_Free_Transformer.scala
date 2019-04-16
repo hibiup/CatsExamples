@@ -16,7 +16,6 @@ package Example_20_Free_Tagless {
             type InterType
             type OutputType
 
-
             /** *************************************
               * 1) ADT
               * */
@@ -25,12 +24,10 @@ package Example_20_Free_Tagless {
             final case class F2S(f: InterType) extends Result[OutputType]
             final case class F2B(f: InterType) extends Result[OutputType]
 
-
             /** **************************************
               * 2) Free Lift
               * */
             type FreeResult[A] = Free[Result, A]
-
 
             /** ************************************
               * 3) 定义 DSL
@@ -47,7 +44,6 @@ package Example_20_Free_Tagless {
                 /** 在 for-comprehension 里实现逻辑分支. */
                 s <- if (f.canBeBoolean) f2b(f) else f2s(f)      // 使用 type class 支持运算（隐式注入）
             } yield s
-
 
             /** *********************************************
               * 4) Free 路由
@@ -88,6 +84,7 @@ package Example_20_Free_Tagless {
         }
     }
 
+
     /****************************************************
       * 业务实现
       * */
@@ -105,7 +102,6 @@ package Example_20_Free_Tagless {
         }
         import types._
 
-
         /** 实现时才具体化所有用到的数据类型 */
         object ALGs extends ALGs {
             type InputType = Int
@@ -118,7 +114,6 @@ package Example_20_Free_Tagless {
             }
         }
         import ALGs._
-
 
         /** 实现对以上数据类型的业务逻辑 */
         object implicits {
@@ -195,8 +190,9 @@ package Example_20_Free_Tagless {
         }
     }
 
+
     /** ***************************************
-      * 5) 使用时
+      * 使用时
       * */
     package app {
         import implement._
