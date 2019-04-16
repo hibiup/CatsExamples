@@ -203,7 +203,7 @@ package Example_22_Tagless {
                 case class USER(id: ID, email: String, loyaltyPoints: Point)
                 type User = USER
 
-                override implicit def CopyUser(s: USER): Design.UserOps = new UserOps {
+                override implicit def UserOps(s: USER): Design.UserOps = new UserOps {
                     override def copyPoint(p: Int): USER = s.copy(loyaltyPoints = s.loyaltyPoints + p)
                     override def email: String = s.email
                     override def loyaltyPoints: Int = s.loyaltyPoints
