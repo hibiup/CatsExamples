@@ -122,8 +122,9 @@ package Example_20_Free_Tagless {
             /** 实现对以上数据类型的业务逻辑 */
             object implicits {
                 /*
-                 * 实现辅助 ResultContainer 运算的 Monad.
-                 * Cats 和 Scalaz 提供了大部分基本的数据类型的 Monad，因此大部分情况下不需要自己实现．
+                 * Monad[ResultContainer] 实际上是没必要的, 因为 ResultContainer[A] = EitherT[...] 本身就是 Monad,
+                 * Cats 和 Scalaz 提供了大部分基本的数据类型的 Monad，因此大部分情况下不需要自己实现．如果是定制类, 就需要实现
+                 * Monad[F] 接口. 以下只是个例子, 删除不影响运行.
                  * */
                 implicit object ResultMonad extends Monad[ResultContainer] {
                     implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
@@ -250,6 +251,12 @@ package Example_20_Free_Tagless {
                     def f2b(f: InterType): F[OutputType]
                 }
 
+                /* // 伴随类由 @finalAlg 自动生成, 如果要消除使用时 “import Result.autoDerive._” 误报, 也可以显示添加。
+                object Result {
+                    def apply[F[_]](implicit inst: Result[F]): Result[F] = inst
+                }
+                */
+
                 /** ************************************
                   * 3) 定义 DSL
                   * */
@@ -311,25 +318,12 @@ package Example_20_Free_Tagless {
                 implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
                 val logger = Logger(LoggerFactory.getLogger(this.getClass))
 
-                implicit object ResultMonad extends Monad[ResultContainer] {
-                    implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
-                    val logger = Logger(LoggerFactory.getLogger(this.getClass))
-
-                    override def flatMap[A, B](fa: ResultContainer[A])(f: A => ResultContainer[B]): ResultContainer[B] = fa flatMap { a => f(a) }
-
-                    override def tailRecM[A, B](a: A)(f: A => ResultContainer[Either[A, B]]): ResultContainer[B] = flatMap(f(a)) {
-                        case Left(e) => tailRecM(e)(f)
-                        case Right(b) => pure(b)
-                    }
-
-                    override def pure[A](x: A): ResultContainer[A] = EitherT {
-                        WriterT {
-                            Future {
-                                (Vector.empty, x.asRight)
-                            }
-                        }
-                    }
-                }
+                /*
+                 * Monad[ResultContainer] 是没必要的,因为 ResultContainer[A] = EitherT[...] 本身就是 Monad,
+                 * 如果是定制类,需要实现 Monad[F] 接口. 参见上例.
+                 *
+                  implicit object ResultMonad extends Monad[ResultContainer] {}
+                */
 
                 implicit object Interpreter extends Result[ResultContainer] {
                     def i2f(i: InputType): ResultContainer[InterType] = assemble[InterType] {
@@ -376,7 +370,7 @@ package Example_20_Free_Tagless {
             import implement._
             import types._
             import implicits._ // 引进实现
-            import implicits.ResultMonad
+            //import implicits.ResultMonad
 
             object Client extends App {
                 import scala.concurrent.Await
