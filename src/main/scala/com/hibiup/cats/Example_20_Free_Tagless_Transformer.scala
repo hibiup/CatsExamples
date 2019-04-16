@@ -13,8 +13,8 @@ package Example_20_Free_Tagless {
         package design {
 
             trait ALGs { // 代数抽象
-            // 使用到的类型
-            type InputType
+                // 使用到的类型
+                type InputType
                 type InterType
                 type OutputType
 
@@ -250,8 +250,11 @@ package Example_20_Free_Tagless {
                 type InterType
                 type OutputType
 
+                // InterType 需要一个 type class 支持特定的条件运算（在 comp 内），用隐式注入得到实例．
+                implicit def isBoolean(s: InterType): InterTypeOps[InterType]
+
                 /** *************************************
-                  * 1) ADT
+                  * 1) 定义 DSL
                   * */
                 @finalAlg
                 @autoFunctorK(true)
@@ -259,33 +262,24 @@ package Example_20_Free_Tagless {
                     def i2f(i: InputType): F[InterType]
                     def f2s(f: InterType): F[OutputType]
                     def f2b(f: InterType): F[OutputType]
-                }
 
-                /*
+                    /** 1-2) Free 组合 */
+                    final def comp[F[_]: Monad: DSL](i: InputType): F[OutputType] = for {
+                        f <- implicitly[DSL[F]].i2f(i)
+                        /** 在 for-comprehension 里实现逻辑分支. */
+                        s <- if (f.canBeBoolean) implicitly[DSL[F]].f2b(f) else implicitly[DSL[F]].f2s(f) // 使用 type class 支持运算（隐式注入）
+                    } yield s
+                }
                 // 伴随类由 @finalAlg 自动生成, 如果要消除使用时 “import Result.autoDerive._” 误报, 也可以显示添加。
-                object Result {
-                    def apply[F[_]](implicit inst: Result[F]): Result[F] = inst
-                }
-                */
+                /*object DSL {
+                    def apply[F[_]](implicit inst: DSL[F]): DSL[F] = inst
+                }*/
 
-                /** ************************************
-                  * 3) 定义 DSL
-                  * */
-
-                // 需要一个 type class 支持特定的条件运算，用隐式注入得到实例．
-                implicit def isBoolean(s: InterType): InterTypeOps[InterType]
-
-                /* Free 组合 */
-                final def comp[F[_]: Monad: DSL](i: InputType): F[OutputType] = for {
-                    f <- implicitly[DSL[F]].i2f(i)
-                    /** 在 for-comprehension 里实现逻辑分支. */
-                    s <- if (f.canBeBoolean) implicitly[DSL[F]].f2b(f) else implicitly[DSL[F]].f2s(f) // 使用 type class 支持运算（隐式注入）
-                } yield s
-
-                implicit def toFree[F[_]]: F ~> Free[F, ?] = λ[F ~> Free[F, ?]](t => Free.liftF(t))
+                /** 2) 支持 Free */
+                implicit final def toFree[F[_]]: F ~> Free[F, ?] = λ[F ~> Free[F, ?]](t => Free.liftF(t))
             }
 
-            // 支持抽象类型的 type class
+            // 支持 InterType.canBeBoolean (在 comp 内) 的 type class 接口
             @typeclass trait InterTypeOps[A] { self =>
                 def canBeBoolean: Boolean
             }
@@ -297,11 +291,10 @@ package Example_20_Free_Tagless {
           * */
         package implement {
             import design._
-
             import scala.concurrent.Future
 
             /**
-              * 到实现的时候才定义返回值和容器的类型
+              * 1) 定义返回值和容器的类型
               */
             object types {
                 implicit val ec = scala.concurrent.ExecutionContext.global
@@ -326,7 +319,7 @@ package Example_20_Free_Tagless {
 
             import types._
 
-            /** 实现时才具体化所有用到的数据类型 */
+            /** 2) 具体化所有用到的数据类型 */
             object Alg extends Alg {
                 type InputType = Int
                 type InterType = BigDecimal
@@ -340,19 +333,18 @@ package Example_20_Free_Tagless {
 
             import Alg._
 
-            /** 实现对以上数据类型的业务逻辑 */
+            /** 3) 实现对以上数据类型的业务逻辑 */
             object implicits {
-                //implicit val ec = scala.concurrent.ExecutionContext.global
                 val logger = Logger(LoggerFactory.getLogger(this.getClass))
 
                 /*
-                 * Monad[ResultContainer] 是没必要的,因为 ResultContainer[A] = EitherT[...] 本身就是 Monad,
+                 * 3-2) Monad[ResultContainer] 是没必要的,因为 ResultContainer[A] = EitherT[...] 本身就是 Monad,
                  * 如果是定制类,需要实现 Monad[F] 接口. 参见上例.
                  *
                  *    implicit object ResultMonad extends Monad[ResultContainer] {}
                  */
 
-                /** 实现业务逻辑 */
+                /** 3-1) 实现业务逻辑 */
                 implicit object Interpreter extends DSL[ResultContainer] {
                     def i2f(i: InputType): ResultContainer[InterType] =
                         // 返回值（可以进一步拆分出纯业务函数去实现）
@@ -373,17 +365,6 @@ package Example_20_Free_Tagless {
                                 Vector(IO(logger.debug(s"[Thread-${Thread.currentThread.getId}] - f2b"))),
                                 (if (f < 1) false else true).toString.asRight
                         ).assemble
-
-                    /* 将打包方法移到外面去隐式植入
-                    type ContentType[A] = (Report, Either[Throwable, A])
-                    final private def assemble[A](content: ContentType[A]): ResultContainer[A] = EitherT {
-                        WriterT {
-                            Future {
-                                content
-                            }
-                        }
-                    }
-                    */
                 }
             }
         }
@@ -403,7 +384,7 @@ package Example_20_Free_Tagless {
                 import scala.concurrent.duration.Duration
 
                 import Alg._
-                import Alg.DSL._ // 引进 DSL
+                import Interpreter._       // 引进 DSL
                 import DSL.autoDerive._
 
                 // Free
