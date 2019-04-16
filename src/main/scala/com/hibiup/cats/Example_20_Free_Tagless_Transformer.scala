@@ -234,7 +234,7 @@ package Example_20_Free_Tagless {
             import cats.{Monad, ~>}
             import cats.tagless.{autoFunctorK, finalAlg}
 
-            trait ALGs { // 代数抽象
+            trait Alg { // 代数抽象
                 // 使用到的类型
                 type InputType
                 type InterType
@@ -245,7 +245,7 @@ package Example_20_Free_Tagless {
                   * */
                 @finalAlg
                 @autoFunctorK(true)
-                trait Result[F[_]] {
+                trait DSL[F[_]] {
                     def i2f(i: InputType): F[InterType]
                     def f2s(f: InterType): F[OutputType]
                     def f2b(f: InterType): F[OutputType]
@@ -264,10 +264,10 @@ package Example_20_Free_Tagless {
                 implicit def isBoolean(s: InterType): InterTypeOps // 需要一个 type class 支持特定的条件运算，用隐式注入得到实例．
 
                 /* Free 组合 */
-                final def comp[F[_]: Monad: Result](i: InputType): F[OutputType] = for {
-                    f <- implicitly[Result[F]].i2f(i)
+                final def comp[F[_]: Monad: DSL](i: InputType): F[OutputType] = for {
+                    f <- implicitly[DSL[F]].i2f(i)
                     /** 在 for-comprehension 里实现逻辑分支. */
-                    s <- if (f.canBeBoolean) implicitly[Result[F]].f2b(f) else implicitly[Result[F]].f2s(f) // 使用 type class 支持运算（隐式注入）
+                    s <- if (f.canBeBoolean) implicitly[DSL[F]].f2b(f) else implicitly[DSL[F]].f2s(f) // 使用 type class 支持运算（隐式注入）
                 } yield s
 
                 implicit def toFree[F[_]]: F ~> Free[F, ?] = λ[F ~> Free[F, ?]](t => Free.liftF(t))
@@ -300,7 +300,7 @@ package Example_20_Free_Tagless {
             import types._
 
             /** 实现时才具体化所有用到的数据类型 */
-            object ALGs extends ALGs {
+            object Alg extends Alg {
                 type InputType = Int
                 type InterType = BigDecimal
                 type OutputType = String
@@ -311,7 +311,7 @@ package Example_20_Free_Tagless {
                 }
             }
 
-            import ALGs._
+            import Alg._
 
             /** 实现对以上数据类型的业务逻辑 */
             object implicits {
@@ -325,7 +325,8 @@ package Example_20_Free_Tagless {
                   implicit object ResultMonad extends Monad[ResultContainer] {}
                 */
 
-                implicit object Interpreter extends Result[ResultContainer] {
+                /* 实现业务逻辑 */
+                implicit object Interpreter extends DSL[ResultContainer] {
                     def i2f(i: InputType): ResultContainer[InterType] = assemble[InterType] {
                         // 返回值（可以进一步拆分出纯业务函数去实现）
                         (
@@ -370,15 +371,14 @@ package Example_20_Free_Tagless {
             import implement._
             import types._
             import implicits._ // 引进实现
-            //import implicits.ResultMonad
 
             object Client extends App {
                 import scala.concurrent.Await
                 import scala.concurrent.duration.Duration
 
-                import ALGs._
-                import ALGs.Result // 引进 DSL 和业务解释器
-                import Result.autoDerive._
+                import Alg._
+                import Alg.DSL._ // 引进 DSL
+                import DSL.autoDerive._
 
                 List(-1, 0, 1, 2).foreach { i =>
                     Await.result(comp[Free[ResultContainer, ?]](i).foldMap(FunctionK.id).value.run, Duration.Inf) match {
