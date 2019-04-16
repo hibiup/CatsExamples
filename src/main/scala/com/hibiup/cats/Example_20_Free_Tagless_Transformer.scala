@@ -98,9 +98,23 @@ package Example_20_Free_Tagless {
               * 到实现的时候才定义返回值和容器的类型
               */
             object types {
+                implicit val ec = scala.concurrent.ExecutionContext.global
+
                 type Report = Vector[IO[Unit]]
                 type λ[α] = WriterT[Future, Report, α]
                 type ResultContainer[A] = EitherT[λ, Throwable, A]
+
+                /** 对于复杂的返回值容器，可以同时定义一个打包方法，以便于 Interpreter 将结果打包.*/
+                type ContentType[A] = (Report, Either[Throwable, A])
+                implicit class ResultWrapper[A](content: ContentType[A]) {
+                    def assemble: ResultContainer[A] = EitherT {
+                        WriterT {
+                            Future {
+                                content
+                            }
+                        }
+                    }
+                }
             }
 
             import types._
@@ -156,44 +170,39 @@ package Example_20_Free_Tagless {
                     /**
                       * 根据返回值容器实现对返回值的装箱.
                       **/
-                    type ContentType[A] = (Report, Either[Throwable, A])
-
+                    /*type ContentType[A] = (Report, Either[Throwable, A])
                     final private def assemble[A](content: ContentType[A]): ResultContainer[A] = EitherT {
                         WriterT {
                             Future {
                                 content
                             }
                         }
-                    }
+                    }*/
 
                     // 实现业务方法
-                    override def i2f(i: InputType): ResultContainer[InterType] = assemble[InterType] {
+                    override def i2f(i: InputType): ResultContainer[InterType] =
                         // 返回值（可以进一步拆分出纯业务函数去实现）
                         (
-                                Vector(IO(logger.debug("i2f"))),
+                                Vector(IO(logger.debug(s"[Thread-${Thread.currentThread.getId}] - i2f"))),
                                 if (i >= 0) BigDecimal(i).asRight // 告知顶层的 EitherT 将这个值转载如 right
                                 else new RuntimeException("Input is smaller then 0").asLeft
-                        )
-                    }
+                        ).assemble
 
-                    override def f2s(f: InterType): ResultContainer[OutputType] = assemble[OutputType] {
+                    override def f2s(f: InterType): ResultContainer[OutputType] =
                         (
-                                Vector(IO(logger.debug("f2s"))),
+                                Vector(IO(logger.debug(s"[Thread-${Thread.currentThread.getId}] - f2s"))),
                                 f.toString.asRight
-                        )
-                    }
+                        ).assemble
 
-                    override def f2b(f: InterType): ResultContainer[OutputType] = assemble[OutputType] {
+                    override def f2b(f: InterType): ResultContainer[OutputType] =
                         (
-                                Vector(IO(logger.debug("f2b"))),
+                                Vector(IO(logger.debug(s"[Thread-${Thread.currentThread.getId}] - f2b"))),
                                 (if (f < 1) false else true).toString.asRight
-                        )
-                    }
+                        ).assemble
                 }
 
                 implicit val compiler: Compiler[ResultContainer] = BusinessInterpreter.compiler
             }
-
         }
 
 
