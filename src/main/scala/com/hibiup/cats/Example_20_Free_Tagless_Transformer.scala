@@ -781,4 +781,375 @@ package Example_20_Free_Tagless {
             }
         }
     }
+
+
+    package free_try_tagless {
+        package design {
+            import cats.implicits._
+            import cats.free.Free
+            import cats.{Monad, ~>}
+            import cats.tagless.{autoFunctorK, finalAlg}
+            import simulacrum.typeclass
+
+            trait Alg { // 代数抽象
+            // 使用到的类型
+            type InputType
+                type InterType
+                type OutputType
+
+                // InterType 需要一个 type class 支持特定的条件运算（在 comp 内），用隐式注入得到实例．
+                implicit def isBoolean(s: InterType): InterTypeOps[InterType]
+
+                /** *************************************
+                  * 1) 定义 DSL
+                  * */
+                @finalAlg
+                @autoFunctorK(true)
+                trait DSL[F[_]] {
+                    def i2f(i: InputType): F[InterType]
+                    def f2s(f: InterType): F[OutputType]
+                    def f2b(f: InterType): F[OutputType]
+
+                    /** 1-2) Free 组合 */
+                    final def comp[F[_]: Monad: DSL](i: InputType): F[OutputType] = for {
+                        f <- implicitly[DSL[F]].i2f(i)
+                        /** 在 for-comprehension 里实现逻辑分支. */
+                        s <- if (f.canBeBoolean) implicitly[DSL[F]].f2b(f) else implicitly[DSL[F]].f2s(f) // 使用 type class 支持运算（隐式注入）
+                    } yield s
+                }
+                // 伴随类由 @finalAlg 自动生成, 如果要消除使用时 “import Result.autoDerive._” 误报, 也可以显示添加。
+                /*object DSL {
+                    def apply[F[_]](implicit inst: DSL[F]): DSL[F] = inst
+                }*/
+
+                /** 2) 支持 Free */
+                implicit final def toFree[F[_]]: F ~> Free[F, ?] = λ[F ~> Free[F, ?]](t => Free.liftF(t))
+            }
+
+            // 支持 InterType.canBeBoolean (在 comp 内) 的 type class 接口
+            @typeclass trait InterTypeOps[A] { self =>
+                def canBeBoolean: Boolean
+            }
+        }
+
+
+        /** **************************************************
+          * 业务实现
+          * */
+        package implement {
+            import design._
+            import scala.util.{Try,Failure,Success}
+
+            /**
+              * 1) 定义返回值和容器的类型
+              */
+            object types {
+                implicit val ec = scala.concurrent.ExecutionContext.global
+
+                /** 设计返回值容器 */
+                type Report = Vector[IO[Unit]]
+                type ResultContainer[A] = WriterT[Try, Report, A]
+
+                /** 对于复杂的返回值容器，可以同时定义一个打包方法，以便于 Interpreter 将结果打包.*/
+                type ContentType[A] = (Report, A)
+                implicit class ResultWrapper[A](content: ContentType[A]) {
+                    def assemble: ResultContainer[A] = {
+                        WriterT {
+                            if (content._2 == null) Failure(new RuntimeException("Got nothing"))
+                            else Success(content)
+                        }
+                    }
+                }
+            }
+
+            import types._
+
+            /** 2) 具体化所有用到的数据类型 */
+            object Alg extends Alg {
+                type InputType = Int
+                type InterType = BigDecimal
+                type OutputType = String
+
+                // 实现隐式 type class, 支持对 InterType(BigDecimal) 的条件运算
+                implicit def isBoolean(s: InterType): InterTypeOps[InterType] = new InterTypeOps[InterType] {
+                    override def canBeBoolean: Boolean = s >= 0 && s <= 1
+                }
+            }
+
+            import Alg._
+
+            /** 3) 实现对以上数据类型的业务逻辑 */
+            object implicits {
+                val logger = Logger(LoggerFactory.getLogger(this.getClass))
+
+                /*
+                 * 3-2) Monad[ResultContainer] 是没必要的,因为 ResultContainer[A] = EitherT[...] 本身就是 Monad,
+                 * 如果是定制类,需要实现 Monad[F] 接口. 参见上例.
+                 *
+                 *    implicit object ResultMonad extends Monad[ResultContainer] {}
+                 */
+
+                /** 3-1) 实现业务逻辑 */
+                implicit object Interpreter extends DSL[ResultContainer] {
+                    def i2f(i: InputType): ResultContainer[InterType] = {
+                        val threadName = Thread.currentThread.getName
+                        // 返回值（可以进一步拆分出纯业务函数去实现）
+                        (
+                            Vector(IO(logger.debug(s"[$threadName] - i2f"))),
+                            if (i >= 0) BigDecimal(i) // 告知顶层的 EitherT 将这个值转载如 right
+                            else null
+                        ).assemble // 调用隐式注入的打包方法打包结果
+                    }
+
+                    def f2s(f: InterType): ResultContainer[OutputType] = {
+                        val threadName = Thread.currentThread.getName
+                        (
+                            Vector(IO(logger.debug(s"[$threadName] - f2s"))),
+                            f.toString
+                        ).assemble
+                    }
+
+                    def f2b(f: InterType): ResultContainer[OutputType] = {
+                        val threadName = Thread.currentThread.getName
+                        (
+                            Vector(IO(logger.debug(s"[$threadName] - f2b"))),
+                            (if (f < 1) false else true).toString
+                        ).assemble
+                    }
+                }
+            }
+        }
+
+
+        /** ***************************************
+          * 使用时
+          * */
+        package app {
+            import cats.arrow.FunctionK
+            import implement._
+            import types._
+            import implicits._ // 引进实现
+
+            object Client extends App {
+                import scala.util.{Success, Failure}
+
+                import Alg._
+                import Interpreter._       // 引进 DSL
+                import DSL.autoDerive._
+
+                // Free
+                List(-1, 0, 1, 2).foreach { i =>
+                    comp[Free[ResultContainer, ?]](i).foldMap(FunctionK.id).run match {
+                        case Failure(t) => println(t)
+                        case Success((logs, res)) =>
+                            logs.foreach(_.unsafeRunSync())
+                            println(res)
+                    }
+                }
+
+                // None Free
+                List(-1, 0, 1, 2).foreach { i =>
+                    comp[ResultContainer](i).run match {
+                        case Failure(t) => println(t)
+                        case Success((logs, res)) =>
+                            logs.foreach(_.unsafeRunSync())
+                            println(res)
+                    }
+                }
+            }
+        }
+    }
+
+
+    package free_future_try_tagless {
+        package design {
+            import cats.implicits._
+            import cats.free.Free
+            import cats.{Monad, ~>}
+            import cats.tagless.{autoFunctorK, finalAlg}
+            import simulacrum.typeclass
+
+            trait Alg { // 代数抽象
+            // 使用到的类型
+            type InputType
+                type InterType
+                type OutputType
+
+                // InterType 需要一个 type class 支持特定的条件运算（在 comp 内），用隐式注入得到实例．
+                implicit def isBoolean(s: InterType): InterTypeOps[InterType]
+
+                /** *************************************
+                  * 1) 定义 DSL
+                  * */
+                @finalAlg
+                @autoFunctorK(true)
+                trait DSL[F[_]] {
+                    def i2f(i: InputType): F[InterType]
+                    def f2s(f: InterType): F[OutputType]
+                    def f2b(f: InterType): F[OutputType]
+
+                    /** 1-2) Free 组合 */
+                    final def comp[F[_]: Monad: DSL](i: InputType): F[OutputType] = for {
+                        f <- implicitly[DSL[F]].i2f(i)
+                        /** 在 for-comprehension 里实现逻辑分支. */
+                        s <- if (f.canBeBoolean) implicitly[DSL[F]].f2b(f) else implicitly[DSL[F]].f2s(f) // 使用 type class 支持运算（隐式注入）
+                    } yield s
+                }
+                // 伴随类由 @finalAlg 自动生成, 如果要消除使用时 “import Result.autoDerive._” 误报, 也可以显示添加。
+                /*object DSL {
+                    def apply[F[_]](implicit inst: DSL[F]): DSL[F] = inst
+                }*/
+
+                /** 2) 支持 Free */
+                implicit final def toFree[F[_]]: F ~> Free[F, ?] = λ[F ~> Free[F, ?]](t => Free.liftF(t))
+            }
+
+            // 支持 InterType.canBeBoolean (在 comp 内) 的 type class 接口
+            @typeclass trait InterTypeOps[A] { self =>
+                def canBeBoolean: Boolean
+            }
+        }
+
+
+        /** **************************************************
+          * 业务实现
+          * */
+        package implement {
+            import design._
+            import scala.concurrent.{Future}
+
+            /**
+              * 1) 定义返回值和容器的类型
+              */
+            object types {
+                implicit val ec = scala.concurrent.ExecutionContext.global
+
+                /** 设计返回值容器 */
+                type Report = Vector[IO[Unit]]
+                type ResultContainer[A] = WriterT[Future, Report, A]
+
+                /** 对于复杂的返回值容器，可以同时定义一个打包方法，以便于 Interpreter 将结果打包.*/
+                type ContentType[A] = (Report, A)
+                implicit class ResultWrapper[A](content: ContentType[A]) {
+                    def assemble: ResultContainer[A] = {
+                        WriterT {
+                            if (content._2 == null) Future.failed(new RuntimeException("Got nothing"))
+                            else Future.successful(content)
+                        }
+                    }
+                }
+            }
+
+            import types._
+
+            /** 2) 具体化所有用到的数据类型 */
+            object Alg extends Alg {
+                type InputType = Int
+                type InterType = BigDecimal
+                type OutputType = String
+
+                // 实现隐式 type class, 支持对 InterType(BigDecimal) 的条件运算
+                implicit def isBoolean(s: InterType): InterTypeOps[InterType] = new InterTypeOps[InterType] {
+                    override def canBeBoolean: Boolean = s >= 0 && s <= 1
+                }
+            }
+
+            import Alg._
+
+            /** 3) 实现对以上数据类型的业务逻辑 */
+            object implicits {
+                val logger = Logger(LoggerFactory.getLogger(this.getClass))
+
+                /*
+                 * 3-2) Monad[ResultContainer] 是没必要的,因为 ResultContainer[A] = EitherT[...] 本身就是 Monad,
+                 * 如果是定制类,需要实现 Monad[F] 接口. 参见上例.
+                 *
+                 *    implicit object ResultMonad extends Monad[ResultContainer] {}
+                 */
+
+                /** 3-1) 实现业务逻辑 */
+                implicit object Interpreter extends DSL[ResultContainer] {
+                    def i2f(i: InputType): ResultContainer[InterType] = {
+                        val threadName = Thread.currentThread.getName
+                        // 返回值（可以进一步拆分出纯业务函数去实现）
+                        (
+                            Vector(IO(logger.debug(s"[$threadName] - i2f"))),
+                            if (i >= 0) BigDecimal(i) // 告知顶层的 EitherT 将这个值转载如 right
+                            else null
+                        ).assemble // 调用隐式注入的打包方法打包结果
+                    }
+
+                    def f2s(f: InterType): ResultContainer[OutputType] = {
+                        val threadName = Thread.currentThread.getName
+                        (
+                            Vector(IO(logger.debug(s"[$threadName] - f2s"))),
+                            f.toString
+                        ).assemble
+                    }
+
+                    def f2b(f: InterType): ResultContainer[OutputType] = {
+                        val threadName = Thread.currentThread.getName
+                        (
+                            Vector(IO(logger.debug(s"[$threadName] - f2b"))),
+                            (if (f < 1) false else true).toString
+                        ).assemble
+                    }
+                }
+            }
+        }
+
+
+        /** ***************************************
+          * 使用时
+          * */
+        package app {
+            import cats.arrow.FunctionK
+            import implement._
+            import types._
+            import implicits._ // 引进实现
+
+            object Client extends App {
+                //import scala.util.{Success, Failure}
+                import scala.util.{Try,Failure,Success}
+                import scala.concurrent.Await
+                import scala.concurrent.duration.Duration
+
+                import Alg._
+                import Interpreter._       // 引进 DSL
+                import DSL.autoDerive._
+
+                // Free
+                List(-1, 0, 1, 2).foreach { i =>
+                    val mapped = comp[Free[ResultContainer, ?]](i).foldMap(FunctionK.id).run.transform {
+                        /** Failure 的 Future 必须转成 Success，否则在 Await 的时候会还原出异常。*/
+                        case Failure(t) => Success(t)
+                        case Success((logs, res)) => Success(logs, res)
+                    }
+
+                    Await.result(mapped, Duration.Inf) match {
+                        case a:Throwable =>
+                            println(a)
+                        case (logs:Report, res)=>
+                            logs.foreach(_.unsafeRunSync())
+                            println(res)
+                    }
+                }
+
+                // None Free
+                List(-1, 0, 1, 2).foreach { i =>
+                    val mapped = comp[ResultContainer](i).run.transform {
+                        case Failure(t) => Success(t)
+                        case Success((logs, res)) => Success(logs, res)
+                    }
+                    Await.result(mapped, Duration.Inf) match {
+                        case a:Throwable =>
+                            println(a)
+                        case (logs:Report, res)=>
+                            logs.foreach(_.unsafeRunSync())
+                            println(res)
+                    }
+                }
+            }
+        }
+    }
 }
