@@ -12,6 +12,9 @@ lazy val CatsExamples = (project in file(".")).
             version := "0.1",
             name := "CatsExamples",
             scalaVersion := "2.12.7",
+            resolvers ++= Seq(
+                "Typesafe backup repo" at "http://repo.typesafe.com/typesafe/repo/"
+            ),
             libraryDependencies ++= Seq(
                 "org.scalatest" %% "scalatest" % scalaTestVersion % Test,
                 //"org.specs2" %% "specs2-core" % specs2Version % Test,
@@ -23,6 +26,7 @@ lazy val CatsExamples = (project in file(".")).
                 "org.typelevel" %% "cats-tagless-macros" % catsTaglessVersion,
                 "org.typelevel" %% "cats-tagless-legacy-macros" % catsTaglessVersion,
                 "org.typelevel" %% "cats-mtl-core" % "0.2.1",
+                "com.typesafe" %% "config" % "1.3.1",
                 "ch.qos.logback" % "logback-classic" % logBackVersion,
                 "com.typesafe.scala-logging" %% "scala-logging" % scalaLogging
             ),
