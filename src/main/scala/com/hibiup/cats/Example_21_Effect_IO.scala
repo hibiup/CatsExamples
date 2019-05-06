@@ -172,8 +172,10 @@ package Example_21_Effect_IO {
       * 通过回调返回 Either。
       *
       * 不管是多线程还是协程 (Future 也不一定运行在新线程中，取决于线程池是否有闲暇线程，否则它可能阻塞在当前线程中。) 的异步，
-      * 都需要实现回调。IO.async 的作用就是为某个（异步）任务植入回调（虽然实际上也可以为非异步任务植入回调，比如 Try）。
-      * 以Future为例:
+      * 都需要实现回调。IO.async 的作用就是为某个（异步）任务植入回调，被植入的任务必须具有回调接口，例如 Future 或"观察者模式"
+      * 的 onComplete。并且回调不发生在当前线程中, 它处于被植入的线程内.
+      *
+      * 下面以Future为例:
       *
       * 参考：https://stackoverflow.com/questions/53682686/cats-effect-and-asynchronous-io-specifics
       * */
@@ -250,7 +252,6 @@ package Example_21_Effect_IO {
         Thread.sleep(1000)
     }
 
-
     /*************************************
       * IO.suspend(f) 相当于 IO(f.flatten)，并且是 Lazy 的。也就是说它对参数 f 产生有两个作用：
       *
@@ -294,7 +295,7 @@ package Example_21_Effect_IO {
             contextShift
         }.flatMap(_ => task).unsafeRunSync())
 
-        /** Cats 定义了 *> 运算符用于线程切换: */
+        /** Cats 为宿主定义了 *> 隐式方法代替 flatMap, 因此可以写成(ContextShift是隐式参数): */
         import cats.implicits._
         println((IO.shift *> task).unsafeRunSync())
 
@@ -302,9 +303,49 @@ package Example_21_Effect_IO {
         println(task.flatMap(a =>
             IO.shift.map(_ => s"[${Thread.currentThread.getName}] <* $a")).unsafeRunSync())
 
-        /** <* 用于线程切换 */
+        /** <* 隐式方法代替 flatMap, 不同的是它返回宿主自己的类型 */
         println((task <* IO.shift).unsafeRunSync())
+    }
 
+    /**
+      * 当 IO 任务遇到 async 时，会生成一个 callback 回调函数交给目标函数（比如 asyncIO），然后 IO 阻塞监听直到 callback
+      * 被目标函数调用为止再继续前进。满足异步的唯一条件是 callback 函数被调用,否则 IO 任务会永远处于阻塞状态。可见 async 本
+      * 质上只是一个回调机制，可以被用于非多线程环境，比如我们可以将它用于 Try, 将 Try 转成 Either,只要通过 callback 返回
+      * 新的值就可以了：
+      * */
+    object io_async_for_Try extends App {
+        import cats.implicits._
+        implicit val ec = scala.concurrent.ExecutionContext.global
+
+        def TryAsyncIO(t:Try[String]): IO[String] = IO.async{ callback => {
+            println(s"[${Thread.currentThread.getName}] async")
+
+            /** 将 Try 转换成 Either. 然后回调 callback, 否则宿主 IO 会一直被阻塞。*/
+            t match {
+                case Success(s) =>
+                    callback(Right(s"Async callback receive Success"))
+                case Failure(f) =>
+                    callback(Left(f))
+            }
+        } }
+
+        print(TryAsyncIO(Try(throw new RuntimeException("Boom!"))).attempt.unsafeRunSync())
+    }
+
+    /**
+      * 因为 Async IO 必须通过 callback 来解锁阻塞状态，因此如果 callback 不被调用,那么就会永远阻塞下去,因此可以得到一
+      * 个阻塞函数: never
+      * */
+    object io_never extends App{
+        def never: IO[Nothing] = IO.async{_ =>
+                println("This async doesn't call CALLBACK function, so it will NEVER return!")
+        }
+        // 下面函数会处于阻塞状态
+        // never.unsafeRunSync()
+
+        // println("done") 永远不会被执行到.
+        import cats.implicits._
+        (never *> IO(println("done"))).unsafeRunSync()
     }
 
     /**
