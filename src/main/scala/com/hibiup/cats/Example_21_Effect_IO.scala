@@ -275,7 +275,67 @@ package Example_21_Effect_IO {
     }
 
     /**
-      * io.shift 切换线程(协程)
+      * ContextShift 用于线程池管理
+      *
+      *   evalOn 可以临时切换线程池.
+      *   shift 可固定却换．
+      *
+      *  注意：ContextShift 只切换当前的线程池, 但是并不解决阻塞。它的使用场景是当我们不希望打搅“当前”线程池的工作时，将下一个
+      *  任务切换到另一个线程池去。以保证下一个任务不会给之前的线程池带来干扰。
+      * */
+    object io_contextShift extends App {
+        import java.util.concurrent.Executors
+        import java.util.Calendar
+        import cats.effect.{ContextShift, IO}
+        import cats.implicits._
+
+        /** 1) 新建一个线程上下文切换器 */
+        val defaultEC = ExecutionContext.fromExecutor(Executors.newWorkStealingPool())
+        /*implicit*/ val cs: ContextShift[IO] = IO.contextShift(defaultEC)
+
+        /** 2) 准备另一个零时任务线程池 */
+        val executor = Executors.newSingleThreadExecutor()
+        val ec2 = ExecutionContext.fromExecutor(executor)
+
+        /** 3-1) 任务1 */
+        def doSth(): IO[Unit] = IO {
+            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务1运算...")
+            Thread.sleep(1000)
+            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务1结束!")
+        }
+
+        /** 3-2) 任务2*/
+        def doSthElse: IO[Unit] = IO {
+            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务2运算...")
+            Thread.sleep(2000)
+            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务2结束!")
+        }
+
+        val runTask2InAnotherPool =
+            for {
+                /** IO (evalOn 返回的是 IO) 缺省是一个阻塞运算，它会等待 doSthElse(虽然运行于另外一个线程池)直到返回结果。
+                  * start 函数返回这个运算的 Fiber。一个 Fiber（迁程）是非阻塞的,它会运行于后台。*/
+                _ <- cs.evalOn(ec2)(doSthElse)       // 在备用线程池中执行
+                        .start(cs)
+                _ <- doSth()                         // 在当前线程池中执行
+            } yield ()
+        /** doSth 不是 Fiber, 因此 unsafeRunSync 会阻塞等待它完成，而不会等待 doSthElse */
+        runTask2InAnotherPool.unsafeRunSync()
+
+        val shiftPools =
+            for {
+                _ <- IO.shift(ec2) *> doSthElse.start(cs)   // 完全切换到备用线程池
+                _ <- IO.shift(defaultEC) *> doSth()         // 切换回来
+            } yield ()
+        shiftPools.unsafeRunSync()
+
+        import java.util.concurrent.TimeUnit
+        executor.shutdown()
+        executor.awaitTermination(100, TimeUnit.NANOSECONDS)
+    }
+
+    /**
+      * io.shift 切换线程池，在不同的线程池之间衔接任务
       * */
     object io_shift extends App{
         import cats.effect.{IO, ContextShift}
@@ -286,7 +346,7 @@ package Example_21_Effect_IO {
         val task = IO(s"[${Thread.currentThread.getName}] - task")
 
         /**
-          * 在另一线程中执行 task
+          * 在另一线程池中执行 task
           *
           * shift 无返回值（Unit）
           * */
@@ -305,6 +365,67 @@ package Example_21_Effect_IO {
 
         /** <* 隐式方法代替 flatMap, 不同的是它返回宿主自己的类型 */
         println((task <* IO.shift).unsafeRunSync())
+    }
+
+    /**
+      * Shift 还有一个重要的功能，它可以重新 schedule 线程池中的任务。
+      *
+      * 如果线程池中存在一个死循环任务。那么这个线程会被永久占用。但是如果这个循环调用了 shift，shift 会清空线程堆栈，重新安排
+      * 所有任务，这时候这个死循环任务就可能被暂时挂起以让其他线程有机会得到执行。
+      * */
+    object io_shift_green extends App {
+        import java.util.concurrent.Executors
+        import cats.effect.{ContextShift, Fiber, IO}
+        import cats.implicits._
+        import scala.concurrent.ExecutionContext
+
+        /** 新建一个单线程池: newSingleThreadExecutor */
+        val ecOne = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
+        val csOne: ContextShift[IO] = IO.contextShift(ecOne)
+
+        def infiniteTask(taskName:String)(implicit cs: ContextShift[IO]): IO[Fiber[IO, Unit]] = {
+            def repeat: IO[Unit] = IO {
+                Thread.sleep(1000)
+                println(s"[${Thread.currentThread.getName}] - $taskName")
+            }.flatMap(_ =>
+                IO.shift *>       /** 重置线程堆栈，给予其他任务使用该线程的机会．*/
+                        repeat)   /** 然后死循环 */
+            repeat.start(cs)      /** 在指定的线程池中启动 IO，并将线程推送到后台 (start 返回一个 Fiber) */
+        }
+
+        val coroutine =
+            for {
+                _ <- infiniteTask("Task 1")(csOne)
+                _ <- infiniteTask("Task 2")(csOne)    /** Task 2 也有机会 */
+            } yield ()
+
+        coroutine.unsafeRunSync()     /** 在后台启动任务 */
+    }
+
+    object io_shift_green_2 extends App{
+        import java.util.concurrent.Executors
+        import cats.effect.{ContextShift, Fiber, IO}
+        import cats.implicits._
+        import java.util.Calendar
+        import scala.concurrent.ExecutionContext
+
+        /** 新建一个单线程池: newSingleThreadExecutor */
+        val ec = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
+        implicit val cs: ContextShift[IO] = IO.contextShift(ec)
+
+        def longTimeTask(taskName:String)(implicit cs: ContextShift[IO]) = IO {
+            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务 ${taskName} 运算...")
+            Thread.sleep(2000)
+            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务 ${taskName} 结束!")
+        }
+
+        // 如果线程池只有一个线程，shift 不能够主动剥夺已经在执行中的任务．
+        val prog = for {
+            _ <- (IO.shift *> longTimeTask("Task 1")).start(cs)
+            _ <- (IO.shift *> longTimeTask("Task 2")).start(cs)  // <- 按顺序执行
+        } yield()
+
+        prog.unsafeRunSync()
     }
 
     /**
@@ -346,33 +467,6 @@ package Example_21_Effect_IO {
         // println("done") 永远不会被执行到.
         import cats.implicits._
         (never *> IO(println("done"))).unsafeRunSync()
-    }
-
-    /**
-    * 利用 IO.shift 可以实现协程切换
-      * */
-    object io_fork extends App {
-        import cats.implicits._
-        import cats.effect.ContextShift
-
-        def fib(n: Int, a: BigDecimal=0, b: BigDecimal=1)(implicit cs: ContextShift[IO]): IO[BigDecimal] = {
-            println(s"[Thread-${Thread.currentThread.getName}]")
-            IO.suspend {
-                if (n > 0) {
-                    val next:IO[BigDecimal] = fib(n - 1, b, a + b)
-                    /** 每 4 个循环切换一个协程。 */
-                    if (n % 4 == 0)
-                        cs.shift *> next    // 等价于：cs.shift.flatMap(_ => next)， next:IO 满足 RT
-                    else
-                        next
-                }
-                else
-                    IO.pure(a)
-            }
-        }
-
-        implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-        println(fib(20).unsafeRunSync())
     }
 
     /**
@@ -454,4 +548,9 @@ package Example_21_Effect_IO {
             case Left(l) => println(s"Exception: ${l.getMessage}")
         }
     }
+
+    /** Deferred */
+    /*object io_defer {
+        val d = Deferred[IO, Int]
+    }*/
 }
