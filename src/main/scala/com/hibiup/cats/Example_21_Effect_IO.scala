@@ -355,7 +355,7 @@ package Example_21_Effect_IO {
             contextShift
         }.flatMap(_ => task).unsafeRunSync())
 
-        /** Cats 为宿主定义了 *> 隐式方法代替 flatMap, 因此可以写成(ContextShift是隐式参数): */
+        /** Cats 为宿主定义了 *> 隐式方法代替 flatMap, 因此可以写成(ContextShift 是隐式参数): */
         import cats.implicits._
         println((IO.shift *> task).unsafeRunSync())
 
@@ -368,9 +368,9 @@ package Example_21_Effect_IO {
     }
 
     /**
-      * Shift 还有一个重要的功能，它可以重新 schedule 线程池中的任务。
+      * Shift 还有一个重要的功能，它可以重新编排线程池中的任务。
       *
-      * 如果线程池中存在一个死循环任务。那么这个线程会被永久占用。但是如果这个循环调用了 shift，shift 会清空线程堆栈，重新安排
+      * 如果线程池中存在一个死循环任务。那么这个线程会被永久占用。但是如果这个循环调用了 shift，shift 会重新安排线程队列，
       * 所有任务，这时候这个死循环任务就可能被暂时挂起以让其他线程有机会得到执行。
       * */
     object io_shift_green extends App {
@@ -388,9 +388,9 @@ package Example_21_Effect_IO {
                 Thread.sleep(1000)
                 println(s"[${Thread.currentThread.getName}] - $taskName")
             }.flatMap(_ =>
-                IO.shift *>       /** 重置线程堆栈，给予其他任务使用该线程的机会．*/
+                IO.shift *>       /** 重置线程队列，给予其他任务使用该线程的机会．*/
                         repeat)   /** 然后死循环 */
-            repeat.start(cs)      /** 在指定的线程池中启动 IO，并将线程推送到后台 (start 返回一个 Fiber) */
+            repeat.start(cs)      /** 在指定的线程池中启动 IO，(start 返回一个 Fiber)并将线程推送到后台 */
         }
 
         val coroutine =
@@ -414,9 +414,9 @@ package Example_21_Effect_IO {
         implicit val cs: ContextShift[IO] = IO.contextShift(ec)
 
         def longTimeTask(taskName:String)(implicit cs: ContextShift[IO]) = IO {
-            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务 ${taskName} 运算...")
+            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务 $taskName 运算...")
             Thread.sleep(2000)
-            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务 ${taskName} 结束!")
+            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务 $taskName 结束!")
         }
 
         // 如果线程池只有一个线程，shift 不能够主动剥夺已经在执行中的任务．
@@ -548,9 +548,4 @@ package Example_21_Effect_IO {
             case Left(l) => println(s"Exception: ${l.getMessage}")
         }
     }
-
-    /** Deferred */
-    /*object io_defer {
-        val d = Deferred[IO, Int]
-    }*/
 }
