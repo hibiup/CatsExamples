@@ -1,6 +1,7 @@
 package com.hibiup.cats
 
 package Example_22_MTL {
+    import cats.effect.IO
     /**
       * https://www.signifytechnology.com/blog/2018/10/a-comprehensive-introduction-to-cats-mtl-by-luka-jacobowitz
       *
@@ -146,28 +147,28 @@ package Example_22_MTL {
     /**
       * 关于 Monad 变换器对作用进行编码的一些概念：
       *
-      * 'EitherT'用于处理捕获异常的作用。'Kleisli'用于处理从环境中读取值的作用。 'StateT'用于处理本地可变状态的作用。
+      * 'EitherT' 用于处理捕获异常的作用。'Kleisli' 用于处理从环境中读取值的作用。 'StateT' 用于处理本地可变状态的作用。
       *
       * 所有这些 monad 变换器都将它们的效果编码为数据结构，但还有另一种方法可以实现相同的结果：类型类！
       *
-      * 例如，我们使用过的'Kleisli.ask'函数​​，如果我们在这里使用类型类，它会是什么样子？好吧，Cats-mtl 有一个实现，它被称为
-      * 'ApplicativeAsk'。您可以将其视为编码为类型类的“Kleisli”：
+      * 例如，我们使用过的 'Kleisli.ask' 函数​​，如果我们在这里使用类型类，它会是什么样子？好吧，Cats-mtl 有一个实现，它被称为
+      * 'ApplicativeAsk'。您可以将其视为编码为类型类的 “Kleisli”：
       *
       *   trait ApplicativeAsk[F[_], E] {
       *     val applicative: Applicative[F]
       *     def ask: F[E]
       *   }
       *
-      * 在它的内部'ApplicativeAsk'只是用于从环境中读取值实，就像'Kleisli'做的那样。同时也与“Kleisli”完全相同，它也包含一个表示
-      * 该环境的类型参数“E”。
+      * 在它的内部 'ApplicativeAsk' 只是用于从环境中读取值实，就像 'Kleisli' 做的那样。同时也与 “Kleisli” 完全相同，它也包含
+      * 一个表示该环境的类型参数“E”。
       *
       * 与 ApplicativeAsk.ask 直接返回 F[_] 不同的是 Kleisli.ask 返回的类型是 Kleisli[F, A, A]:
       *
       * 　　def ask[F[_], A](implicit F: Applicative[F]): Kleisli[F, A, A] =　Kleisli(F.pure)
       *
-      * 如果您想知道为什么'ApplicativeAsk'具有'Applicative'字段而不是仅仅从'Applicative'扩展，因为是为了避免因在范围内隐含地具有
-      * 多个给定类型的子类（此处为'Applicative'）而产生的隐含歧义。所以在这种情况下，也因此我们喜欢组合而不是继承，否则，我们不能将
-      * 'Monad'与'ApplicativeAsk'放在一起使用。您可以在 Adelbert Chang 的这篇优秀博客文章中阅读有关此问题的更多信息：
+      * 如果您想知道为什么'ApplicativeAsk'具有'Applicative'字段而不是仅仅从'Applicative'扩展，因为是为了避免因在范围内隐含地
+      * 具有多个给定类型的子类（此处为'Applicative'）而产生的隐含歧义。所以在这种情况下，也因此我们喜欢组合而不是继承，否则，我们不
+      * 能将 'Monad' 与 'ApplicativeAsk' 放在一起使用。您可以在 Adelbert Chang 的这篇优秀博客文章中阅读有关此问题的更多信息：
       * （https://typelevel.org/blog/2016/09/30/subtype-typeclasses.html）。
       * */
 
@@ -195,9 +196,9 @@ package Example_22_MTL {
             def serviceCall(c: Config): IO[Result]      // serviceCall: (c: Config)cats.effect.IO[Result]
 
             /**
-              * 现在我们应该用'F'替换'Kleisli'并添加'ApplicativeAsk[F，Config]'约束，对吧？但是我们有一个小问题，我们怎样才能将
-              * 'serviceCall'这个'IO'值提升到我们抽象的'F'语境中？幸运的是，'cat-effect'已经定义了一个称为'LiftIO'的 trait 旨在
-              * 帮助我们，它完全符合您的期望：
+              * 现在我们应该用 'F' 替换 'Kleisli' 并添加 'ApplicativeAsk[F，Config]' 约束，对吧？但是我们有一个小问题，我们怎
+              * 样才能将 'serviceCall' 这个 'IO' 值提升到我们抽象的 'F' 语境中？幸运的是，'cat-effect' 已经定义了一个称为
+              * 'LiftIO' 的 trait 旨在帮助我们，它完全符合您的期望：
               *
               *   @typeclass trait LiftIO[F[_]] {
               *     def liftIO[A](io: IO[A]): F[A]
@@ -205,8 +206,8 @@ package Example_22_MTL {
               * */
 
             /**
-              * 如果存在'LiftIO[F]'的实例，我们可以将任何'IO[A]'提升为'F[A]'。此外，'IO' 定义了一个方法'to'，它利用这个类型类来
-              * 提供一些更友好的语法。
+              * 如果存在 'LiftIO[F]' 的实例，我们可以将任何 'IO[A]' 提升为 'F[A]'。此外，'IO' 定义了一个方法 'to'，它利用这
+              * 个类型类来提供一些更友好的语法。
               *
               * 有了这些，我们现在可以使用 MTL 定义我们的'readerProgram'
               * */
@@ -229,10 +230,10 @@ package Example_22_MTL {
             } yield result
 
             /**
-              * 我们将'Kleisli.ask'的调用替换为'ApplicativeAsk'提供的'ask'，而不是使用'Kleisli.liftF'去将'IO'提升到
-              * 'Kleisli'中去．我们也可以简单地在'IO'上运行to，如果你想写的漂亮些。
+              * 我们将 'Kleisli.ask' 的调用替换为 'ApplicativeAsk' 提供的 'ask'，也不是使用 'LiftIO[F].liftIO' 去将 'IO'
+              * 提升到 'Kleisli' 中去．我们可以简单地在 'IO' 上运行 to[F]，如果你想写的漂亮些。
               *
-              * 现在运行它，我们需要做的就是指定要运行的目标'F'，在我们的例子中'Kleisli[IO，Config，Result]'完全适合：
+              * 现在运行它，我们需要做的就是指定要运行的目标 'F'，在我们的例子中 'Kleisli[IO，Config，Result]' 完全适合：
               * */
             // 给 for-comprehension 指定 Kleisli[IO, Config, ?] 类型参数, 它会将结果 IO[A] 装入 Kleisli[IO, Config, A]
             val materializedProgram = readerProgram[Kleisli[IO, Config, ?]]
@@ -253,7 +254,7 @@ package Example_22_MTL {
               * 到目前为止虽然一切正常，但这似乎也并没有比以前更好很多。我一开始就开玩笑说，一旦你使用一个以上的 monad 变换器，就
               * 会感到 MTL 真的很棒。所以(为了证明这一点)，假设我们的程序现在需要能够处理错误（我认为这是一个非常合理的假设）。
               *
-              * 要做到这一点，我们将使用'MonadError'，它在 cat-core 而不是 mtl 中，但从本质上讲，它编码了与 'EitherT' 共享
+              * 要做到这一点，我们将使用 'MonadError'，它在 cat-core 而不是 mtl 中，但从本质上讲，它编码了与 'EitherT' 共享
               * 的"短路"效果。
               *
               * 为了使事情变得简单，假设我们的配置在某种程度上是无效的，我们想要引发一个错误。为此，我们需要一个函数简单地验证返回
@@ -265,25 +266,25 @@ package Example_22_MTL {
             sealed trait AppError
             case object InvalidConfig extends AppError
 
-            /** 现在我们可以从头开始扩展我们的程序。我们将添加一个'MonadError[E，AppError]' 类型别名'MonadAppError'，然后在我
+            /** 现在我们可以从头开始扩展我们的程序。我们将添加一个 'MonadError[E，AppError]' 类型别名 'MonadAppError'，然后在我
               * 们的程序中为它添加一个约束。*/
             import cats.MonadError
             type MonadAppError[Ehr[_]] = MonadError[Ehr, AppError]
 
             /**
-              * 我们可以做的另一件事是为'ApplicativeAsk [F，Config]'定义一个类型别名，这样我们就可以更容易地将它与上下文绑
+              * 我们可以做的另一件事是为 'ApplicativeAsk [F，Config]' 定义一个类型别名，这样我们就可以更容易地将它与上下文绑
               * 定语法一起使用：
               * */
             import cats.mtl.ApplicativeAsk
             type ApplicativeConfig[F[_]] = ApplicativeAsk[F, Config]
 
             /**
-              * 现在我们想要以某种方式确保我们的配置有效，并且如果无效则引发'InvalidConfig'错误。为此，我们只需使用 'MonadError'
-              * 提供的'ensure'功能, 它为 F 提供了一个 ensure 函数, 看起来是这样的：
+              * 现在我们想要以某种方式确保我们的配置有效，并且如果无效则引发 'InvalidConfig' 错误。为此，我们只需使用 'MonadError'
+              * 提供的 'ensure' 功能, 它为 F 提供了一个 ensure 函数, 看起来是这样的：
               *
               *   def ensure(error: => E)(predicate: A => Boolean): F[A]
               *
-              * 如果'predicate' 函数返回'false'，它将引发传递的参数'error'，否则返回 F 自己。我们去尝试吧：
+              * 如果 'predicate' 函数返回 'false'，它将引发传递的参数 'error'，否则返回 F 自己。我们去尝试吧：
               * */
             import cats.implicits._
             def program[F[_]: MonadAppError: ApplicativeConfig: LiftIO]: F[Result] = for {
@@ -303,7 +304,7 @@ package Example_22_MTL {
             } yield result
 
             /**
-              * 很简单，现在让我们实现它吧！为此，我们将使用'Kleisli'，'EitherT' 和 'IO' 的 monad 堆栈。组合起来它看起来应该是:
+              * 很简单，现在让我们实现它吧！为此，我们将使用 'Kleisli'，'EitherT' 和 'IO' 的 monad 堆栈。组合起来它看起来应该是:
               *
               * 　　IO[[AppError，Reader[Config，A]]]
               * */
@@ -320,7 +321,7 @@ package Example_22_MTL {
             // EitherT.liftF 把一个带容器的值F[A]装入 Right．返回 Either[F, Nothing, A]
             def main2: IO[Either[AppError, Result]] = EitherT.liftF(getConfig).flatMap(materializedProgramStack.run).value
             /**
-              * 这就是 mtl 的神奇之处，它能够为堆栈中的每个 monad 变换器提供类型类实例。这意味着当我们堆叠'EitherT'，'ReaderT' 和
+              * 这就是 mtl 的神奇之处，它能够为堆栈中的每个 monad 变换器提供类型类实例。这意味着当我们堆叠 'EitherT'，'ReaderT' 和
               * 'StateT' 时，你将能够获得 'MonadError'，'ApplicativeAsk' 和 'MonadState' 的实例，这非常有用！
               * */
 
@@ -363,21 +364,88 @@ package Example_22_MTL {
               * 因此这是您需要的最小样板代码。
               ************************************************************************* */
         }
-
-        /*object blueprint_implement extends blueprint_v2 {
-            override type Config = String
-            override type Result = Int
-
-            override def getConfig: IO[Config] = IO("Config")
-            override def validConfig(c: Config): Boolean = false
-            override def serviceCall(c: Config): IO[Result] = IO(1)
-        }
-
-        object app extends App {
-            import blueprint_implement._
-            println(main2.unsafeRunSync())
-        }*/
     }
+
+    package MTL_Option_1_Example {
+        import cats.Monad
+        import cats.data._
+        import cats.effect._
+
+        /**
+          * MTL 支持对 Kleisli[IO, _, _] 的变换, 因此可以利用 MTL 实现自动变换.
+          * */
+        trait blueprint {
+            type Config
+            type Result
+
+            def getConfig: IO[Config]               // getConfig: cats.effect.IO[Config]
+            /** 1) 中间函数类型为 Option */
+            def serviceCall(c: Config): /*IO*/Option[Result]      // serviceCall: (c: Config)cats.effect.IO[Result]
+
+            import cats.effect.IO
+            import cats.effect.LiftIO
+            import cats.mtl.ApplicativeAsk
+            import cats.implicits._
+
+            def readerProgram[F[_]: Monad: LiftIO](implicit A: ApplicativeAsk[F, Config]): F[Result] = for {
+                config <- A.ask
+                /** 2) 利用缺省的 LiftIO 来实现中间过程的类型对齐，不需要额外实现一个。*/
+                result <- IO[Result](serviceCall(config) match {
+                    case Some(a:Result) => a
+                }).to[F]
+            } yield result
+
+            /** 3) 使用 MTL 来实现 Kleisli[IO, _, _] 的自动变换 */
+            import cats.mtl.implicits._
+            val materializedProgram = readerProgram[Kleisli[IO, Config, ?]]
+
+            def _main: IO[Result] = getConfig.flatMap(materializedProgram.run) // main: cats.effect.IO[Result]
+        }
+    }
+
+    package MTL_Option_2_Example {
+        import cats.Monad
+        import cats.data._
+        import cats.effect._
+
+        /**
+          * 如果将 Kleisli[IO, _, _] 替换成 Kleisli[Option, _, _], MTL 就无法支持.
+          * */
+        trait blueprint {
+            type Config
+            type Result
+
+            /** 1) 输入类型为 Option */
+            def getConfig: /*IO*/Option[Config]
+            def serviceCall(c: Config): IO[Result]
+
+            import cats.mtl.implicits._
+            import cats.effect.IO
+            import cats.effect.LiftIO
+            import cats.mtl.ApplicativeAsk
+            import cats.implicits._
+
+            def readerProgram[F[_]: Monad: LiftIO](implicit A: ApplicativeAsk[F, Config]): F[Result] = for {
+                config <- A.ask
+                result <- serviceCall(config).to[F]
+            } yield result
+
+            /** 3)
+              * 得不到 MTL 的支持,需要自己实现一个 LiftIO 将 IO 转换成 Kleisli[Option, _, _]
+              * */
+            implicit val LiftIO2Kleisli = new LiftIO[Kleisli[Option, Config, ?]] {
+                override def liftIO[A](ioa: IO[A]): Kleisli[Option, Config, A] = ???
+            }
+
+            /** 2) MTL 不支持输出类型 Kleisli[Option, _, _], 需要提供隐式 LiftIO 来将中间过程的 IO 转成 Option */
+            //import cats.mtl.implicits._
+            val materializedProgram = readerProgram[Kleisli[/*IO*/Option, Config, ?]]
+
+
+            def _main: Option[Result]/*: IO[Result]*/ = getConfig.flatMap(materializedProgram.run) // main: cats.effect.IO[Result]
+        }
+    }
+
 
     /**
       * 添加 State
@@ -575,6 +643,4 @@ package Example_22_MTL {
             case Left(t) => IO(println(t.getMessage))
         }).unsafeRunSync()
     }
-
-
 }
