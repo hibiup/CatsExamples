@@ -26,7 +26,7 @@ package Example_22_MTL {
       * 举个例子，假设我们想要调用一个服务，但是为了进行调用，我们需要传递一些配置:
       * */
 
-    object ReaderT_Example {
+    package ReaderT_Example {
         /** 首先，定义一些引进和类型声明：*/
         import cats.data._
         import cats.effect._
@@ -48,9 +48,13 @@ package Example_22_MTL {
               * 然后我们可以使用'flatMap'，'map'　或　for-comprehensions　来实际使用该值：
               **/
             def readerProgram: Kleisli[IO, Config, Result] = for {
+                // Kleisli.ask 从环境中取得(由 run 传入的)参数值, ask 的第一个参数是环境容器的类型,第二个是取出的入参类型.
                 config <- Kleisli.ask[IO, Config]
+
+                // Kleisli.liftF 读入一个(对齐的)容器, 提取出其中的值.
                 result <- Kleisli.liftF(serviceCall(config))
             } yield result // readerProgram: cats.data.ReaderT[cats.effect.IO,Config,Result]
+
 
             /**
               * 现在我们有一个 'Kleisli'，它返回我们要的结果，下一步是实际“注入”依赖。为此，'Kleisli[F，E，A]'为我们提供了一个'run'函数，
@@ -79,7 +83,7 @@ package Example_22_MTL {
       * 一个常见的用例是向外部服务发送请求，并且在请求返回之后，使用结果值来修改用于创建下一个请求的环境。这个环境可以像缓存这样简单的东西，
       * 或者更复杂的东西，比如动态地改变每个请求的参数，取决于环境当前所处的状态。让我们看一个抽象的例子，展示这种能力。
       * */
-    object StateT_Example {
+    package StateT_Example {
         import cats.effect.IO
         import cats.data.StateT
 
@@ -146,7 +150,7 @@ package Example_22_MTL {
       *
       * 所有这些 monad 变换器都将它们的效果编码为数据结构，但还有另一种方法可以实现相同的结果：类型类！
       *
-      * 例如，我们关注过的'Kleisli.ask'函数​​，如果我们在这里使用类型类，它会是什么样子？好吧，Cats-mtl 有一个实现，它被称为
+      * 例如，我们使用过的'Kleisli.ask'函数​​，如果我们在这里使用类型类，它会是什么样子？好吧，Cats-mtl 有一个实现，它被称为
       * 'ApplicativeAsk'。您可以将其视为编码为类型类的“Kleisli”：
       *
       *   trait ApplicativeAsk[F[_], E] {
@@ -154,12 +158,16 @@ package Example_22_MTL {
       *     def ask: F[E]
       *   }
       *
-      * 在它的内部'ApplicativeAsk'只是用于从环境中读取值实，就像'ReaderT'做的那样。同时也与“ReaderT”完全相同，它也包含一个表示
+      * 在它的内部'ApplicativeAsk'只是用于从环境中读取值实，就像'Kleisli'做的那样。同时也与“Kleisli”完全相同，它也包含一个表示
       * 该环境的类型参数“E”。
+      *
+      * 与 ApplicativeAsk.ask 直接返回 F[_] 不同的是 Kleisli.ask 返回的类型是 Kleisli[F, A, A]:
+      *
+      * 　　def ask[F[_], A](implicit F: Applicative[F]): Kleisli[F, A, A] =　Kleisli(F.pure)
       *
       * 如果您想知道为什么'ApplicativeAsk'具有'Applicative'字段而不是仅仅从'Applicative'扩展，因为是为了避免因在范围内隐含地具有
       * 多个给定类型的子类（此处为'Applicative'）而产生的隐含歧义。所以在这种情况下，也因此我们喜欢组合而不是继承，否则，我们不能将
-      * 'Monad'与'ApplicativeAsk'放在一起使用。您可以在Adelbert Chang的这篇优秀博客文章中阅读有关此问题的更多信息：
+      * 'Monad'与'ApplicativeAsk'放在一起使用。您可以在 Adelbert Chang 的这篇优秀博客文章中阅读有关此问题的更多信息：
       * （https://typelevel.org/blog/2016/09/30/subtype-typeclasses.html）。
       * */
 
@@ -169,16 +177,15 @@ package Example_22_MTL {
       * 'ApplicativeAsk'是 Cats-mtl 的一个核心案例。 Cats-mtl 为大多数常见效果提供类型类，使您可以选择所需的效果，而无需实现特
       * 定的 monad 变换器栈。
       *
-      * 理想情况下，您只使用具有不同类型类约束的抽象类型构造函数“F [_]”编写所有代码，然后在最后实现能够满足这些约束的特定数据类型的代
+      * 理想情况下，您只使用具有不同类型类约束的抽象类型构造函数“F[_]”编写所有代码，然后在最后实现能够满足这些约束的特定数据类型的代
       * 码并运行之。
       *
-      * 所以不用多说，让我们尝试将我们早期的'Reader'程序转换为mtl-style。首先，我将再次包括原始程序：
+      * 所以不用多说，让我们尝试将我们早期的'Reader'程序转换为 mtl-style。首先，我将再次包括部分原始程序：
       * */
-    object MTL_Example {
+    package MTL_Reader_Example {
         import cats.Monad
         import cats.data._
         import cats.effect._
-        import simulacrum.typeclass
 
         trait blueprint {
             type Config
@@ -198,7 +205,7 @@ package Example_22_MTL {
               * */
 
             /**
-              * 如果存在'LiftIO [F]'的实例，我们可以将任何'IO[A]'提升为'F[A]'。此外，'IO' 定义了一个方法'to'，它利用这个类型类来
+              * 如果存在'LiftIO[F]'的实例，我们可以将任何'IO[A]'提升为'F[A]'。此外，'IO' 定义了一个方法'to'，它利用这个类型类来
               * 提供一些更友好的语法。
               *
               * 有了这些，我们现在可以使用 MTL 定义我们的'readerProgram'
@@ -210,9 +217,15 @@ package Example_22_MTL {
             import cats.implicits._
 
             // F[_]: Monad: LiftIO == Monad[F[_]], LiftIO[F[_]]
+            // Monad[F[_]]  为 F 提供 FlatMap 隐式
+            // LiftIO[F[_]] 为 F 提供 to[F] 或 liftIO 隐式
             def readerProgram[F[_]: Monad: LiftIO](implicit A: ApplicativeAsk[F, Config]): F[Result] = for {
-                config <- A.ask
-                result <- serviceCall(config).to[F]  // LiftIO[F].liftIO[Result](serviceCall(config))
+                // ApplicativeAsk[F, Config].ask 等价于 Kleisli.ask[F, Config]，不同之处是 ApplicativeAsk 可以直接
+                // 从环境中获得 F[_], 而不是 Kleisli[F, _, _]
+                config <- /*Kleisli.ask[IO, Config]*/ A.ask
+
+                // 将 IO[Result] 提升为 F[Result] 以对齐输出类型. 等价于：LiftIO[F].liftIO[Result](serviceCall(config))
+                result <- serviceCall(config).to[F]
             } yield result
 
             /**
@@ -221,6 +234,7 @@ package Example_22_MTL {
               *
               * 现在运行它，我们需要做的就是指定要运行的目标'F'，在我们的例子中'Kleisli[IO，Config，Result]'完全适合：
               * */
+            // 给 for-comprehension 指定 Kleisli[IO, Config, ?] 类型参数, 它会将结果 IO[A] 装入 Kleisli[IO, Config, A]
             val materializedProgram = readerProgram[Kleisli[IO, Config, ?]]
 
             def main: IO[Result] = getConfig.flatMap(materializedProgram.run) // main: cats.effect.IO[Result]
@@ -251,10 +265,10 @@ package Example_22_MTL {
             sealed trait AppError
             case object InvalidConfig extends AppError
 
-            /** 现在我们可以从头开始扩展我们的程序。我们将添加一个'MonadError [F，AppError]' 类型别名'MonadAppError'，然后在我
+            /** 现在我们可以从头开始扩展我们的程序。我们将添加一个'MonadError[E，AppError]' 类型别名'MonadAppError'，然后在我
               * 们的程序中为它添加一个约束。*/
             import cats.MonadError
-            type MonadAppError[F[_]] = MonadError[F, AppError]
+            type MonadAppError[Ehr[_]] = MonadError[Ehr, AppError]
 
             /**
               * 我们可以做的另一件事是为'ApplicativeAsk [F，Config]'定义一个类型别名，这样我们就可以更容易地将它与上下文绑
@@ -264,17 +278,27 @@ package Example_22_MTL {
             type ApplicativeConfig[F[_]] = ApplicativeAsk[F, Config]
 
             /**
-              * 现在我们想要以某种方式确保我们的配置有效，并且如果无效则引发'InvalidConfig'错误。为此，我们只需使用'MonadError'
-              * 提供的'ensure'功能。它看起来像是这样的：
+              * 现在我们想要以某种方式确保我们的配置有效，并且如果无效则引发'InvalidConfig'错误。为此，我们只需使用 'MonadError'
+              * 提供的'ensure'功能, 它为 F 提供了一个 ensure 函数, 看起来是这样的：
               *
               *   def ensure(error: => E)(predicate: A => Boolean): F[A]
               *
-              * 它满足我们的需求：如果'predicate'函数返回'false'，它将引发传递的参数'error'。我们去尝试吧：
+              * 如果'predicate' 函数返回'false'，它将引发传递的参数'error'，否则返回 F 自己。我们去尝试吧：
               * */
             import cats.implicits._
             def program[F[_]: MonadAppError: ApplicativeConfig: LiftIO]: F[Result] = for {
-                config <- ApplicativeAsk[F, Config].ask
-                        .ensure(InvalidConfig)(validConfig)    // MTL: 在 ApplicativeConfig 上堆叠 MonadAppError 类型类
+                /**
+                  * 由于在调用 program 的时候使用了 mtl 的隐式，使得 for-comprehension 在返回 F 也就是
+                  * Kleisli[EitherT[IO, AppError, Result], Config, Result] 的时候具有了自动装箱能力。
+                  * 因此只需要将注意力放在最终的返回类型 Result 上。
+                  * */
+                // 如果正确, 得到 ask 的值并装入: Kleisli[EitherT[IO, Nothing, ?], Config, A]
+                // 否则抛出 AppError 最终得到 Kleisli[EitherT[IO, AppError, Nothing], Config, A]
+                config <- ApplicativeAsk[F, Config].ask       // 输出类型 A == Config, 同时读出的值被装入 ? 处
+                        .ensure(InvalidConfig)(validConfig)   // ensure 是 MonadError[U, AppError] 为 F 赋予的函数。
+                                                              // 它具有为 U，也就是 EitherT 设置 AppError 的能力
+
+                // 最终得到 Kleisli[EitherT[IO, Nothing, Result], Config, Result]
                 result <- serviceCall(config).to[F]
             } yield result
 
@@ -283,50 +307,210 @@ package Example_22_MTL {
               *
               * 　　IO[[AppError，Reader[Config，A]]]
               * */
-            type EitherApp[A] = EitherT[IO, AppError, A]
-            type Stack[A] = ReaderT[EitherApp, Config, A]
-            //type Stack[A] = ReaderT[EitherT[IO, AppError, ?], Config, A]
+            type EitherAppError[A] = EitherT[IO, AppError, A]
+            type Stack[A] = Kleisli[EitherAppError, Config, A]   //type Stack[A] = Kleisli[EitherT[IO, AppError, ?], Config, A]
 
+            /**
+              * MTL: 让 for-comprehension 具有自动处理堆叠的数据类型类的能力. 如果堆栈（F）被注入了 MonadError 类型类，则堆栈中
+              * 必须有 EitherT!
+              * */
             import cats.mtl.implicits._
-            val materializedProgramStack: Stack[Result] = program[Stack]
+            val materializedProgramStack: Stack[Result] = program[Stack]    // F == Stack
 
+            // EitherT.liftF 把一个带容器的值F[A]装入 Right．返回 Either[F, Nothing, A]
             def main2: IO[Either[AppError, Result]] = EitherT.liftF(getConfig).flatMap(materializedProgramStack.run).value
             /**
               * 这就是 mtl 的神奇之处，它能够为堆栈中的每个 monad 变换器提供类型类实例。这意味着当我们堆叠'EitherT'，'ReaderT' 和
               * 'StateT' 时，你将能够获得 'MonadError'，'ApplicativeAsk' 和 'MonadState' 的实例，这非常有用！
               * */
 
-            /*import cats._
+
+            /**********************************************************************
+              *  如果你好奇它是如何具有这样的能力的，让我们来快速看一下一个具有 Kleisli 的 MonadError 实例：
+              * */
             import cats.data._
             import cats.implicits._
-            def monadErrorForReaderT[F[_], E, R](implicit F: MonadError[F, E]): MonadError[ReaderT[F, R, ?], E] =
-                new MonadError[ReaderT[F, R, ?], E] {
-                    def raiseError[A](e: E): ReaderT[F, R, A] =
-                        Kleisli.liftF(F.raiseError(e))
-
-                    def handleErrorWith[A](fa: ReaderT[F, R, A])(f: E => ReaderT[F, R, A]): ReaderT[F, R, A] =
+            def monadErrorForReaderT[F[_], E, R](implicit me: MonadError[F, E]): MonadError[Kleisli[F, R, ?], E] =
+                new MonadError[Kleisli[F, R, ?], E] {
+                    def raiseError[A](e: E): Kleisli[F, R, A] = Kleisli.liftF(me.raiseError(e))
+                    def handleErrorWith[A](fa: Kleisli[F, R, A])(f: E => Kleisli[F, R, A]): Kleisli[F, R, A] =
                         Kleisli.ask[F, R].flatMap { r =>
                             Kleisli.liftF(fa.run(r).handleErrorWith(e => f(e).run(r)))
                         }
-                }*/
+
+                    override def flatMap[A, B](fa: Kleisli[F, R, A])(f: A => Kleisli[F, R, B]): Kleisli[F, R, B] = ???
+                    override def tailRecM[A, B](a: A)(f: A => Kleisli[F, R, Either[A, B]]): Kleisli[F, R, B] = ???
+                    override def pure[A](x: A): Kleisli[F, R, A] = ???
+                }
+            /**
+              * 为了让 Kleisli[F, R, ?] 具备 MonadError 实例的能力，我们需要为 F 注入 MonadError. 这样我们就可以很容易为
+              * 这个实例处理或抛出异常。注意，这意味着整个变换器栈必须具有抛出或捕获异常的能力，就像我们定义的这个一样。也就是说
+              * 你只要在其中定义了 EitherT，你就具有了这样的提升能力。
+              *
+              * MTL 对　monad 堆栈中不同的类型类提升各自这些功能有不同的策略，但它们超出了本文的范围。
+              *
+              * 这对我们意味着，我们永远不必考虑如何在变换器堆栈中去提升某个单个 Monad。类型类机制使用的隐式搜索负责处理它。我觉得这很
+              * 漂亮。现在让我们对比一下没有没有mtl编写的相同程序：
+              * */
+            def program2: Stack[Result] = for {
+                config <- Kleisli.ask[EitherAppError, Config]
+                _ <- if (validConfig(config)) ().pure[Stack]
+                     else Kleisli.liftF[EitherAppError, Config, Unit](EitherT.leftT(InvalidConfig))
+                result <- Kleisli.liftF(EitherT.liftF[IO, AppError, Result](serviceCall(config)))
+            } yield result  // program2: Stack[Result]
+            /**
+              * 它是相同的程序，但现在我们必须添加类型注释，并且'liftF'　无处不在。如果您尝试删除其中一个类型注释，程序将无法编译，
+              * 因此这是您需要的最小样板代码。
+              ************************************************************************* */
         }
+
+        /*object blueprint_implement extends blueprint_v2 {
+            override type Config = String
+            override type Result = Int
+
+            override def getConfig: IO[Config] = IO("Config")
+            override def validConfig(c: Config): Boolean = false
+            override def serviceCall(c: Config): IO[Result] = IO(1)
+        }
+
+        object app extends App {
+            import blueprint_implement._
+            println(main2.unsafeRunSync())
+        }*/
     }
+
+    /**
+      * 添加 State
+      *
+      * 接下来，让我们假设我们想要发送多个请求，并在下一个请求中使用前一个请求返回的信息，类似于我们之前在“StateT”示例中所做的操作。
+      * 但是我们将使用 MonadState 替代 StateT:
+      *
+      *   trait MonadState[F[_], S] {
+      *     val monad: Monad[F]
+      *     def get: F[S]
+      *     def set(s: S): F[Unit]
+      *     def modify(f: S => S): F[Unit] = get.flatMap(s => set(f(s)))
+      *   }
+      * */
+    package MTL_MonadState_Example {
+        import cats.effect.IO
+        import cats.effect.LiftIO
+        import cats.Monad
+        import cats.implicits._
+
+        trait blueprint extends MTL_Reader_Example.blueprint_v2 {
+            /**
+              * 让我们假设我们有一个请求列表，我们希望在每个请求之后更新环境，并且我们还希望使用该环境来创建下一个请求。在最后，我们想要返回
+              * 我们获得的所有响应的列表：
+              */
+            type Env
+            type Request
+            type Response
+
+            type Result = List[Response]
+
+            def updateEnv(r: Response, env: Env): Env
+            def requests: List[Request]
+            def newServiceCall(c: Config, req: Request, e: Env): IO[Response]
+
+            /**
+              * 到目前为止一切都好，接下来我们将使用'MonadState'来创建一个新函数，它将使用'updateEnv'修改环境以供'newServiceCall'使用。
+              * 为此，我们将为'MonadState[F，Env]'创建一个新类型别名：
+              * */
+            import cats.mtl.MonadState
+            type MonadStateEnv[F[_]] = MonadState[F, Env]
+
+            def requestWithState[F[_]: Monad: MonadStateEnv: LiftIO](c: Config, req: Request): F[Response] = for {
+                /**
+                  * 在这里，我们使用'get'来检索环境的当前状态，然后我们使用'newServiceCall'并将其提升为'F'并用返回内容来修改环境
+                  * (通过 'updateEnv')。
+                  * */
+                env <- MonadState[F, Env].get
+                response <- newServiceCall(c, req, env).to[F]
+                _ <- MonadState[F, Env].modify(updateEnv(response, _))
+            } yield response
+
+            /**
+              * 现在，我们可以在请求列表中使用'requestWithState'，并将这个新部件嵌入到我们的程序中。最好的方法当然是'遍历'，因为我们
+              * 可以利用 'Request => F [Response]' 实现从'List [Request]' 到 'F [List [Response]]' 的转变。所以不用多说，这
+              * 是我们的最终程序，它使用了我们在本文中学到的所有三种不同的mtl类型类：
+              * */
+            import cats.mtl.ApplicativeAsk
+            def program[F[_]: MonadAppError: MonadStateEnv: ApplicativeConfig: LiftIO]: F[Result] = for {
+                config <- ApplicativeAsk[F, Config].ask
+                        .ensure(InvalidConfig)(validConfig)
+                responses <- requests.traverse(req => requestWithState[F](config, req))
+            } yield responses
+
+            /**
+              * 这就是全部！当然，我们仍然必须运行它，所以让我们将'F'实现为适当的数据类型。我们将使用一堆'EitherT'，'StateT'和'
+              * ReaderT'，'IO'作为我们的基础来满足'LiftIO'：
+              * */
+            import cats.data._
+            import cats.mtl.implicits._
+            def materializedProgram3 = program[StateT[EitherT[ReaderT[IO, Config, ?], AppError, ?], Env, ?]]
+
+            /** 现在我们有一个完全适用的变换器堆栈。唯一剩下的就是通过运行各个层将该堆栈重新转换为“IO”。*/
+            def initialEnv: Env
+            def main3: IO[Either[AppError, (Env, Result)]] =  getConfig.flatMap(conf =>
+                    materializedProgram3.run(initialEnv) //Run the StateT layer
+                            .value //Run the EitherT layer
+                            .run(conf) //Run the ReaderT layer
+                )
+
+            /**
+              * 如果我们只使用变换器而不是 mtl 来获得相同的值，那么样板代码的数量将是极其难以忍受的。对于每个 monad 变换器和几十种类型
+              * 的注释，我们需要多个'liftF'，将实际代码隐藏在样板代码的下面。
+              *
+              * 使用 Cats-mtl，处理不同的效果很简单，没有样板。我们可以将我们的应用程序描述为处理抽象上下文'F[_]'的函数，它必须能够提
+              * 供对某些效果的约束。这些约束由 Cats-mtl 中的不同 MTL 类型类提供，并且它们的实例可以通过 Cats-mtl 的底层机制提升到最
+              * 高层。
+              *
+              * 总之，Cats-mtl 提供了两个东西：表示效果的 MTL 类型类和通过变换器堆栈提升这些类的实例的方法。如果您想了解更多有关
+              * Cats-mtl 的信息，请查看Cats-MTL 官方网站: https://typelevel.org/cats-mtl/
+              * */
+        }
+
+        /**
+          * 其他 mtl 类实例
+          *
+          * 我之前说 'ApplicativeAsk' 是 'Kleisli' 的类型类，但它绝不是唯一的实例的。已知 Monad 变换器堆栈非常不可靠，特别是在JVM
+          * 上，因此有一些替代解决方案。例如 "Arrows" (https://github.com/traneio/arrows)，除了输出类型'Arrow[A，B]'之外，它还
+          * 提供具有输入类型的效果类型。如果你稍微眯一下，它实际上相当于一个函数'A => IO[B]' 或 'ReaderT[IO，A，B]'。然而，与此同时
+          * 它的效率更高。
+          *
+          * 其他示例包括使用类似 'cat-effect' 的 'Ref' 来代替 'MonadState'（可在此处找到例子:https://github.com/oleg-py/meow-mtl），
+          * 或使用包含额外的错误类型参数的 bifunctor 'IO'，即 'BIO[E，A]' 来代替 'EitherT [IO，E，A]'（可以在这里找到例子:
+          * https://github.com/LukaJCB/cats-bio）。
+          *
+          * 通常，我们可以通过使用更特殊的数据结构来为我们的效果类型类实例设计更有效的解决方案。 Monad 变换器非常通用，这使它们非常灵活，
+          * 但这种灵活性可能需要付出代价。关于'mtl'的一个好处是我们不必费时去事先选择，而只是在我们的程序运行时才选择。例如，我们可能会在
+          * 开发应用程序时选择某个 monad 变换器。然后，当我们想要扩展时，我们可以简单地通过对的实现程序更改几行代码就转换到新的数据结构。
+          *
+          * 从长远来看，我想提供一个 'cats-mtl' 子模块，它为每种效果类型组合提供非常专业和高效的数据类型。为此，我不久前创建了
+          * cat-mtl-special 库，但它仍然是一项正在进行中的工作。同时也向 Jamie Pullar 致敬，他一直在生产中广泛使用 cat-mtl，
+          * 并且还建立了一些更高性能的实例以及一些标准，你可以在这里找到他说过的话
+          * （https://www.slideshare.net/RyanAdams12/jamie-pullar-cats-mtl-in-action/39）。
+          * */
+    }
+
 
     object Kleisli_liftT extends App{
         import cats.data.Kleisli
         import cats.effect.IO
 
         def LiftIO2Kleisli = {
+            def i = Kleisli.ask[IO, String]
+            println(i.run("Input").unsafeRunSync)
+
             /** liftF(k) 只是 Kleisli(_ => k) 的语法糖 */
-            val k:Kleisli[IO, Unit, String] = Kleisli.liftF(IO("Output from IO"))  // Kleisli(_ => IO("Output from IO"))
-            println(k.run("Input").unsafeRunSync())
+            def k:Kleisli[IO, Unit, String] = Kleisli.liftF(IO("Output from IO"))  // Kleisli(_ => IO("Output from IO"))
+            println(k.run().unsafeRunSync())
         }
 
         LiftIO2Kleisli
     }
 
-
-    import com.sun.media.sound.InvalidDataException
 
     /**
       * Cats MTL(Monad Transformer Library) 是 Cats 的容器转换库

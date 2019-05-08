@@ -59,7 +59,7 @@ package Example_23_MonadError {
           *   def apply[F[_], E](implicit F: MonadError[F, E]): MonadError[F, E] = F
           *
           * 它期待一个 F[_] 参数作为目标容器（通常是 EitherT），和一个 E 类型的错误(通常是 Throwable)。但是因为 EitherT 的参数签名
-          * 是：EitherT[G[_], B, A], 我们只关心第三个参数（A），所以我们可以缩减它，这样 recoveredEitherT 就可以简写为：
+          * 是：EitherT[G[_], B, A],而我们只关心正常，也就是第三个参数（A），所以我们可以缩减它，这样 recoveredEitherT 就可以简写为：
           * */
         type MyEitherT[A] = EitherT[Future, ServiceError, A]
         val recoveredEitherT2 = MonadError[MyEitherT, Throwable].recoverWith(getOrderForUser) {
