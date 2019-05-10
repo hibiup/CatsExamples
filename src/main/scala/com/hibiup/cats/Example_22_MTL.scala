@@ -1,7 +1,6 @@
 package com.hibiup.cats
 
 package Example_22_MTL {
-    import cats.effect.IO
     /**
       * https://www.signifytechnology.com/blog/2018/10/a-comprehensive-introduction-to-cats-mtl-by-luka-jacobowitz
       *
@@ -65,7 +64,7 @@ package Example_22_MTL {
               *
               * 结合我们的'getConfig'目的，我们现在可以编写我们程序的入口点：
               * */
-            def main: IO[Result] = getConfig.flatMap(readerProgram.run) // main: cats.effect.IO[Result]
+            def _main: IO[Result] = getConfig.flatMap(readerProgram.run) // main: cats.effect.IO[Result]
 
             /**
               * 这就是我们如何在Scala中执行函数依赖注入。但是，我认为这种模式并不经常使用，因为它会强制您将所有步骤包装在“Kleisli”中。
@@ -138,7 +137,7 @@ package Example_22_MTL {
 
             /** 现在我们按照意愿完成了一个成熟的计划。但是，我们可以用'StateT'价值实际做些什么呢？要运行完整的程序，我们需要一个'IO'。
               * 当然，就像'ReaderT'一样，我们可以通过使用'run'方法将'StateT'转换为'IO'并为我们的环境提供初始值。我们试试吧！*/
-            def main: IO[(Env, Response)] = stateProgram.run(initialEnv) // main: cats.effect.IO[(Env, Response)]
+            def _main: IO[(Env, Response)] = stateProgram.run(initialEnv) // main: cats.effect.IO[(Env, Response)]
 
             /** 这为我们提供了有状态的应用程序。酷！接下来，我们将看看我们如何组合不同的变换器，以及 monad变换器是什么样的*/
         }
@@ -238,7 +237,7 @@ package Example_22_MTL {
             // 给 for-comprehension 指定 Kleisli[IO, Config, ?] 类型参数, 它会将结果 IO[A] 装入 Kleisli[IO, Config, A]
             val materializedProgram = readerProgram[Kleisli[IO, Config, ?]]
 
-            def main: IO[Result] = getConfig.flatMap(materializedProgram.run) // main: cats.effect.IO[Result]
+            def _main: IO[Result] = getConfig.flatMap(materializedProgram.run) // main: cats.effect.IO[Result]
 
             /**
               * 这种将一个具有抽象类型构造器（[_]: Monad: LiftIO）和类型类（A: ApplicativeAsk[F, Config]）的程序转换成
@@ -319,7 +318,7 @@ package Example_22_MTL {
             val materializedProgramStack: Stack[Result] = program[Stack]    // F == Stack
 
             // EitherT.liftF 把一个带容器的值F[A]装入 Right．返回 Either[F, Nothing, A]
-            def main2: IO[Either[AppError, Result]] = EitherT.liftF(getConfig).flatMap(materializedProgramStack.run).value
+            def _main2: IO[Either[AppError, Result]] = EitherT.liftF(getConfig).flatMap(materializedProgramStack.run).value
             /**
               * 这就是 mtl 的神奇之处，它能够为堆栈中的每个 monad 变换器提供类型类实例。这意味着当我们堆叠 'EitherT'，'ReaderT' 和
               * 'StateT' 时，你将能够获得 'MonadError'，'ApplicativeAsk' 和 'MonadState' 的实例，这非常有用！
@@ -500,7 +499,7 @@ package Example_22_MTL {
 
             /**
               * 现在，我们可以在请求列表中使用'requestWithState'，并将这个新部件嵌入到我们的程序中。最好的方法当然是'遍历'，因为我们
-              * 可以利用 'Request => F [Response]' 实现从'List [Request]' 到 'F [List [Response]]' 的转变。所以不用多说，这
+              * 可以利用 'Request => F[Response]' 实现从'List[Request]' 到 'F[List[Response]]' 的转变。所以不用多说，这
               * 是我们的最终程序，它使用了我们在本文中学到的所有三种不同的mtl类型类：
               * */
             import cats.mtl.ApplicativeAsk
@@ -516,15 +515,26 @@ package Example_22_MTL {
               * */
             import cats.data._
             import cats.mtl.implicits._
-            def materializedProgram3 = program[StateT[EitherT[ReaderT[IO, Config, ?], AppError, ?], Env, ?]]
+            def materializedProgram3 = program[StateT[EitherT[Kleisli[IO, Config, ?], AppError, ?], Env, ?]]
 
             /** 现在我们有一个完全适用的变换器堆栈。唯一剩下的就是通过运行各个层将该堆栈重新转换为“IO”。*/
             def initialEnv: Env
-            def main3: IO[Either[AppError, (Env, Result)]] =  getConfig.flatMap(conf =>
+            def _main3: IO[Either[AppError, (Env, Result)]] =  getConfig.flatMap(conf =>
                     materializedProgram3.run(initialEnv) //Run the StateT layer
                             .value //Run the EitherT layer
                             .run(conf) //Run the ReaderT layer
                 )
+
+            /*********************
+              *  如果调整容器的顺序 */
+            //def materializedProgram4 = program[StateT[Kleisli[EitherT[IO, AppError, ?], Config, ?], Env, ?]]
+
+            /** 执行顺序也需要调整 */
+            //def _main4: IO[Either[AppError, (Env, Result)]] =  getConfig.flatMap(conf =>
+            //    materializedProgram4.run(initialEnv)
+            //            .run(conf) //Run the ReaderT layer
+            //            .value //Run the EitherT layer
+            //)
 
             /**
               * 如果我们只使用变换器而不是 mtl 来获得相同的值，那么样板代码的数量将是极其难以忍受的。对于每个 monad 变换器和几十种类型
