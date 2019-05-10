@@ -279,9 +279,6 @@ package Example_21_Effect_IO {
       *
       *   evalOn 可以临时切换线程池.
       *   shift 可固定却换．
-      *
-      *  注意：ContextShift 只切换当前的线程池, 但是并不解决阻塞。它的使用场景是当我们不希望打搅“当前”线程池的工作时，将下一个
-      *  任务切换到另一个线程池去。以保证下一个任务不会给之前的线程池带来干扰。
       * */
     object io_contextShift extends App {
         import java.util.concurrent.Executors
@@ -291,43 +288,100 @@ package Example_21_Effect_IO {
 
         /** 1) 新建一个线程上下文切换器 */
         val defaultEC = ExecutionContext.fromExecutor(Executors.newWorkStealingPool())
-        /*implicit*/ val cs: ContextShift[IO] = IO.contextShift(defaultEC)
+        /*implicit*/ val defaultCS: ContextShift[IO] = IO.contextShift(defaultEC)
 
         /** 2) 准备另一个零时任务线程池 */
         val executor = Executors.newSingleThreadExecutor()
-        val ec2 = ExecutionContext.fromExecutor(executor)
+        val backupEC = ExecutionContext.fromExecutor(executor)
 
         /** 3-1) 任务1 */
-        def doSth(): IO[Unit] = IO {
+        def doSth(): IO[String] = IO {
             println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务1运算...")
             Thread.sleep(1000)
             println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务1结束!")
+            "I'm doSth"
         }
 
-        /** 3-2) 任务2*/
-        def doSthElse: IO[Unit] = IO {
+        /** 3-2) 任务2 */
+        def doSthElse: IO[String] = IO {
             println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务2运算...")
             Thread.sleep(2000)
             println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务2结束!")
+            "I'm doSthElse"
         }
 
         val runTask2InAnotherPool =
             for {
                 /** IO (evalOn 返回的是 IO) 缺省是一个阻塞运算，它会等待 doSthElse(虽然运行于另外一个线程池)直到返回结果。
-                  * start 函数返回这个运算的 Fiber。一个 Fiber（迁程）是非阻塞的,它会运行于后台。*/
-                _ <- cs.evalOn(ec2)(doSthElse)       // 在备用线程池中执行
-                        .start(cs)
-                _ <- doSth()                         // 在当前线程池中执行
-            } yield ()
+                  * start 函数返回这个运算的 Fiber。一个 Fiber（迁程）是非阻塞的,它会运行于后台. 通过 join 可以将结果取回。 */
+                a <- defaultCS.evalOn(backupEC)(doSthElse) // evalOn(ec2) 将任务分配到备用线程池中
+                        .start(defaultCS) // start 将运行任务于后台
+                b <- doSth() // 在当前线程池中执行
+            } yield (a, b)
+
         /** doSth 不是 Fiber, 因此 unsafeRunSync 会阻塞等待它完成，而不会等待 doSthElse */
-        runTask2InAnotherPool.unsafeRunSync()
+        val a_and_b = runTask2InAnotherPool.unsafeRunSync()
+        val a_result = a_and_b._1.join.unsafeRunSync() // 阻塞等待异步线程返回结果
+        val b_result = a_and_b._2
+        println(a_result, b_result)
+
+        // 可以多次取回结果
+        println(a_and_b._1.join.unsafeRunSync())
+        println(a_and_b._1.join.unsafeRunSync())
+        println(a_and_b._1.join.unsafeRunSync())
+
+        import java.util.concurrent.TimeUnit
+        executor.shutdown()
+        executor.awaitTermination(100, TimeUnit.NANOSECONDS)
+    }
+
+    object io_contextShift_2 extends App{
+        import java.util.concurrent.Executors
+        import java.util.Calendar
+        import cats.effect.{ContextShift, IO}
+        import cats.implicits._
+
+        /** 1) 新建一个线程上下文切换器 */
+        val defaultEC = ExecutionContext.fromExecutor(Executors.newWorkStealingPool())  // ForkJoinPool
+        /*implicit*/ val defaultCS: ContextShift[IO] = IO.contextShift(defaultEC)
+
+        /** 2) 准备另一个零时任务线程池 */
+        val executor = Executors.newSingleThreadExecutor()  // SingleThreadPool
+        val backupEC = ExecutionContext.fromExecutor(executor)
+        val backupCS: ContextShift[IO] = IO.contextShift(backupEC)
+
+        /** 3-1) 任务1 */
+        def doSth(): IO[String] = IO {
+            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务1运算...")
+            Thread.sleep(1000)
+            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务1结束!")
+            "I'm doSth"
+        }
+
+        /** 3-2) 任务2*/
+        def doSthElse: IO[String] = IO {
+            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务2运算...")
+            Thread.sleep(2000)
+            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务2结束!")
+            "I'm doSthElse"
+        }
 
         val shiftPools =
             for {
-                _ <- IO.shift(ec2) *> doSthElse.start(cs)   // 完全切换到备用线程池
-                _ <- IO.shift(defaultEC) *> doSth()         // 切换回来
-            } yield ()
-        shiftPools.unsafeRunSync()
+                a <- IO.shift(backupEC) *> doSthElse.start(backupCS) // 切换到 SingleThreadPool
+                b <- IO.shift(defaultCS) *> doSth()                  // 切换回 ForkJoinPool
+            } yield (a,b)
+
+        /** doSth 不是 Fiber, 因此 unsafeRunSync 会阻塞等待它完成，而不会等待 doSthElse */
+        val a_and_b = shiftPools.unsafeRunSync()
+        val a_result = a_and_b._1.join.unsafeRunSync()     // 阻塞等待异步线程返回结果
+        val b_result = a_and_b._2
+        println(a_result, b_result)
+
+        // 可以多次取回结果
+        println(a_and_b._1.join.unsafeRunSync())
+        println(a_and_b._1.join.unsafeRunSync())
+        println(a_and_b._1.join.unsafeRunSync())
 
         import java.util.concurrent.TimeUnit
         executor.shutdown()
