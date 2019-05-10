@@ -318,7 +318,6 @@ package Example_21_Effect_IO {
                         .start(defaultCS) // start 将运行任务于后台
                 b <- doSth() // 在当前线程池中执行
             } yield (a, b)
-
         /** doSth 不是 Fiber, 因此 unsafeRunSync 会阻塞等待它完成，而不会等待 doSthElse */
         val a_and_b = runTask2InAnotherPool.unsafeRunSync()
         val a_result = a_and_b._1.join.unsafeRunSync() // 阻塞等待异步线程返回结果
@@ -329,6 +328,10 @@ package Example_21_Effect_IO {
         println(a_and_b._1.join.unsafeRunSync())
         println(a_and_b._1.join.unsafeRunSync())
         println(a_and_b._1.join.unsafeRunSync())
+
+        /** 可多次启动 */
+        val again = runTask2InAnotherPool.unsafeRunSync()
+        println("Again: " + again._1.join.unsafeRunSync())
 
         import java.util.concurrent.TimeUnit
         executor.shutdown()
@@ -386,6 +389,49 @@ package Example_21_Effect_IO {
         import java.util.concurrent.TimeUnit
         executor.shutdown()
         executor.awaitTermination(100, TimeUnit.NANOSECONDS)
+    }
+
+    object io_contextShift_3 extends App{
+        import java.util.concurrent.Executors
+        import cats.effect.{ContextShift, Fiber, IO}
+        import cats.implicits._
+        import java.util.Calendar
+        import scala.concurrent.ExecutionContext
+
+        /** 新建一个单线程池: newSingleThreadExecutor */
+        val executor = Executors.newSingleThreadExecutor()
+        val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.fromExecutor(executor))
+
+        def longTimeTask(taskName:String, sleep:Int) = IO {
+            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务 $taskName 运算...")
+            Thread.sleep(sleep)
+            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务 $taskName 结束!")
+        }
+
+        // 如果线程池只有一个线程，shift 不能够主动剥夺已经在执行中的任务．
+        val prog = for {
+            a <- (IO.shift(cs) *> longTimeTask("Task 1-1", 2000)).start(cs)
+            b <- (IO.shift(cs) *> longTimeTask("Task 1-2", 1000)).start(cs)  // <- 按顺序执行
+        } yield (a,b)
+        val t1 = prog.unsafeRunSync()
+        t1._1.join.unsafeRunSync()
+        t1._2.join.unsafeRunSync()
+
+        import java.util.concurrent.TimeUnit
+        executor.shutdown()
+        executor.awaitTermination(100, TimeUnit.NANOSECONDS)
+
+        /** 新建多个线程的上下文切换器 */
+        val multipleCS: ContextShift[IO] = IO.contextShift(ExecutionContext.fromExecutor(Executors.newWorkStealingPool()))   // ForkJoinPool
+
+        // 多线程池可以并行
+        val multProg = for {
+            a <- (IO.shift(multipleCS) *> longTimeTask("Task 2-1", 2000)).start(multipleCS)
+            b <- (IO.shift(multipleCS) *> longTimeTask("Task 2-2", 1000)).start(multipleCS)
+        } yield (a, b)
+        val t2 = multProg.unsafeRunSync()
+        t2._1.join.unsafeRunSync()
+        t2._2.join.unsafeRunSync()
     }
 
     /**
@@ -456,31 +502,6 @@ package Example_21_Effect_IO {
         coroutine.unsafeRunSync()     /** 在后台启动任务 */
     }
 
-    object io_shift_green_2 extends App{
-        import java.util.concurrent.Executors
-        import cats.effect.{ContextShift, Fiber, IO}
-        import cats.implicits._
-        import java.util.Calendar
-        import scala.concurrent.ExecutionContext
-
-        /** 新建一个单线程池: newSingleThreadExecutor */
-        val ec = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
-        implicit val cs: ContextShift[IO] = IO.contextShift(ec)
-
-        def longTimeTask(taskName:String)(implicit cs: ContextShift[IO]) = IO {
-            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务 $taskName 运算...")
-            Thread.sleep(2000)
-            println(s"[${Thread.currentThread.getName}] - ${Calendar.getInstance.getTimeInMillis} - 任务 $taskName 结束!")
-        }
-
-        // 如果线程池只有一个线程，shift 不能够主动剥夺已经在执行中的任务．
-        val prog = for {
-            _ <- (IO.shift *> longTimeTask("Task 1")).start(cs)
-            _ <- (IO.shift *> longTimeTask("Task 2")).start(cs)  // <- 按顺序执行
-        } yield()
-
-        prog.unsafeRunSync()
-    }
 
     /**
       * 当 IO 任务遇到 async 时，会生成一个 callback 回调函数交给目标函数（比如 asyncIO），然后 IO 阻塞监听直到 callback
