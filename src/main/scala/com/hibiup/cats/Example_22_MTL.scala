@@ -363,6 +363,19 @@ package Example_22_MTL {
               * 因此这是您需要的最小样板代码。
               ************************************************************************* */
         }
+
+        object blueprint_v2_impl extends blueprint_v2 {
+            override type Config = String
+            override type Result = Int
+            override def validConfig(c: Config): Boolean = ???
+            override def getConfig: IO[Config] = ???
+            override def serviceCall(c: Config): IO[Result] = ???
+        }
+
+        object app extends App {
+            import blueprint_v2_impl._
+            _main2
+        }
     }
 
     package MTL_Option_1_Example {

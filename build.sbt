@@ -1,5 +1,6 @@
 val catsVersion = "1.6.0"
-val catsEffectVersion = "1.2.0"
+val catsEffectVersion = "1.3.0"
+val catsMtlVersion = "0.4.0"
 val scalaTestVersion = "3.0.5"
 val specs2Version = "4.3.5"
 val logBackVersion = "1.2.3"
@@ -14,7 +15,7 @@ lazy val CatsExamples = (project in file(".")).
             scalaVersion := "2.12.7",
             resolvers ++= Seq(
                 "Typesafe backup repo" at "http://repo.typesafe.com/typesafe/repo/",
-                "Maven central" at "http://central.maven.org/maven2"
+                // "Maven central" at "http://central.maven.org/maven2"
             ),
             libraryDependencies ++= Seq(
                 "org.scalatest" %% "scalatest" % scalaTestVersion % Test,
@@ -26,7 +27,7 @@ lazy val CatsExamples = (project in file(".")).
                 "org.typelevel" %% "cats-effect" % catsEffectVersion,
                 "org.typelevel" %% "cats-tagless-macros" % catsTaglessVersion,
                 "org.typelevel" %% "cats-tagless-legacy-macros" % catsTaglessVersion,
-                "org.typelevel" %% "cats-mtl-core" % "0.2.1",
+                "org.typelevel" %% "cats-mtl-core" % catsMtlVersion,
                 "com.typesafe" % "config" % "1.3.1",
                 "ch.qos.logback" % "logback-classic" % logBackVersion,
                 "com.typesafe.scala-logging" %% "scala-logging" % scalaLogging
