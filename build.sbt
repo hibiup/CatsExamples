@@ -34,7 +34,7 @@ lazy val CatsExamples = (project in file(".")).
             ),
             //addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full),
             //addCompilerPlugin("org.scalameta" %% "paradise" % "2.1.1" cross CrossVersion.full),
-            //addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.13.2"),
+          addCompilerPlugin("org.typelevel" % "kind-projector" % "0.13.2" cross CrossVersion.full),
             scalacOptions ++= Seq(
                 //"-Xplugin-require:macroparadise",
                 "-language:higherKinds",
