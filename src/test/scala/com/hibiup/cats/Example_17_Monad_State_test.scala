@@ -16,10 +16,10 @@ class Example_17_Monad_State_test extends AnyFlatSpec{
         }
 
         val a = (for {
-            _ <- nextJson
-            n <- nextJson
+            _ <- nextJson // _==1
+            n <- nextJson // n==2
         } yield n).run(Json(1)).value
 
-        println(a)
+        assert(a._2.contains(2))  // a == (json(3), Some(2))
     }
 }
