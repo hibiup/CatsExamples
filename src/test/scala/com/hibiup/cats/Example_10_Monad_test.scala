@@ -1,8 +1,9 @@
 package com.hibiup.cats
 
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
-class Example_10_Monad_test extends FlatSpec{
+
+class Example_10_Monad_test extends AnyFlatSpec{
     import Example_10_Monad._
 
     "Cats Monad definition" should "" in {

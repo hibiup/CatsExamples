@@ -1,8 +1,8 @@
 package com.hibiup.cats
 
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
-class Example_7_Functor_test extends FlatSpec{
+class Example_7_Functor_test extends AnyFlatSpec{
     "Functor map test" should "" in {
         import com.hibiup.cats.Example_7_Functor_map._
         functor_map()

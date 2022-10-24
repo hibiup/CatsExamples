@@ -1,9 +1,9 @@
 package com.hibiup.cats
 
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
 import Example_15_Monad_Writer._
-class Example_15_Monad_Writer_test extends FlatSpec{
+class Example_15_Monad_Writer_test extends AnyFlatSpec{
     "Writer Monad" should "" in writer_example
 
     it should "support flatMap and map methods" in writer_monad_computation

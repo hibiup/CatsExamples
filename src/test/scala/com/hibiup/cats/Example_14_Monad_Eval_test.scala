@@ -1,8 +1,8 @@
 package com.hibiup.cats
 
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
-class Example_14_Monad_Eval_test extends FlatSpec{
+class Example_14_Monad_Eval_test extends AnyFlatSpec{
     "Cats Eval basic usage" should "" in {
         import Example_14_Eval._
         cats_eval()

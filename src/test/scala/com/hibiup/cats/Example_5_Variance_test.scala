@@ -1,8 +1,8 @@
 package com.hibiup.cats
 
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
-class Example_5_Variance_test extends FlatSpec{
+class Example_5_Variance_test extends AnyFlatSpec{
     "Covariance" should "" in {
         import Example_5_Covariance._
         assert(r)

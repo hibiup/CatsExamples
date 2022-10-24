@@ -1,8 +1,8 @@
 package com.hibiup.cats
 
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
-class Example_4_Eq_test extends FlatSpec{
+class Example_4_Eq_test extends AnyFlatSpec{
     "Cats Eq" should "" in {
         import com.hibiup.cats.Example_4_Eq._
         compare_int()

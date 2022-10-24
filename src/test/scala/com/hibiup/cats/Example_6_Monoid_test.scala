@@ -1,8 +1,8 @@
 package com.hibiup.cats
 
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
-class Example_6_Monoid_test extends FlatSpec{
+class Example_6_Monoid_test extends AnyFlatSpec{
     "Semigroup" should "" in {
         import Example_6_Monoid_1._
         val intMonoid = IntMonoid.apply()
