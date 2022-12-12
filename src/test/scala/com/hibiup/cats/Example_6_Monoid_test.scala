@@ -3,7 +3,7 @@ package com.hibiup.cats
 import org.scalatest.flatspec.AnyFlatSpec
 import cats.syntax.all._
 
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 class Example_6_Monoid_test extends AnyFlatSpec{
     "Semigroup" should "" in {
@@ -29,8 +29,8 @@ class Example_6_Monoid_test extends AnyFlatSpec{
         println(a |+| b) // Some(3)
 
         val n:Option[Int] = None
-        println(a |+| n)  // Some(1) + Zero = Some(1)
-        println(n |+| a)  // Zero + Some(1) = Some(1)
+        println(a |+| n)  // Some(1 + Zero) = Some(1)
+        println(n |+| a)  // Some(Zero + 1) = Some(1)
     }
 
     "Option MonoidK" should "" in {
@@ -39,26 +39,30 @@ class Example_6_Monoid_test extends AnyFlatSpec{
 
         // MonoidK
         // Option 和 Either 的 <+> 是 OR 运算: first valid value(First Some OR None)
-        println( a <+> b )
+        println( a <+> b ) // Some(1) OR Some(2) = Some(1)
 
         val n:Option[Int] = None
-        println(a <+> n)
-        println(n <+> a)
+        println(a <+> n)  // Some(1) + Zero = Some(1)
+        println(n <+> a)  // Zero + Some(1) = Some(1)
 
         val n1:Option[Int] = None
-        println(n |+| n1) // None
-        println(n <+> n1) // None
+        println(n |+| n1) // Option(Zero + Zero) = None
+        println(n <+> n1) // Zero + Zero = None
     }
 
     "Try Monoid" should "" in {
-        val t1 = Try(1)
-        val t2 = Try(2)
+        val t1:Try[Int] = Try(1)
+        val t2:Try[Int] = Success(2)
 
         // Monoid
-        println(t1 |+| t2)  // Success(3)
+        println(t1 |+| t2)  // Try(1 + 2) = Success(3)
 
         // MonoidK. Invalid ???
         //println(t1 <+> t2)
+
+        val f1: Try[Int] = Failure(new RuntimeException(("A")))
+        println(f1 |+| t2)  // Try(_ + Throwable) = Failure
+        println(t1 |+| f1)  // Try(Throwable + _) = Failure
     }
 
     "Either Monoid and MonoidK" should "" in {
