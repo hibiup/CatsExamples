@@ -3,6 +3,8 @@ package com.hibiup.cats
 import cats.effect.IO
 
 package Example_21_Effect_IO {
+    import cats.effect.unsafe.implicits.global
+
     import scala.concurrent.duration.Duration
     import scala.concurrent.{Await, ExecutionContext, Future}
     import scala.util.{Failure, Success, Try}
@@ -181,44 +183,47 @@ package Example_21_Effect_IO {
       * */
     object io_async extends App{
         implicit val ec = concurrent.ExecutionContext.global
+
         /**
           * IO.async 为 Future 提供一个接口。如下例所示：
+          *
+          * 接口提供了一个回调函数注册机。
           * */
-        def asyncIO[A](f:Future[A]):IO[A] = IO.async { callback => {
+        def asyncIO[A](f:Future[A]):IO[A] = IO.async_{ register: (Either[Throwable, A] => Unit) => {
             println(s"[${Thread.currentThread.getName}] Async callback is running")
             /**
               * 利用 onComplete 来呼叫回调函数。（onComplete 本身并不是回调。）
               * */
             f.onComplete {
-                case Success(a:String) =>
-                    /** 调用回调函数 */
-                    callback(Right(s"[${Thread.currentThread.getName}] Async callback : 在 Future 线程中发现 Success - $a".asInstanceOf[A]))
-                case Success(x:IO[Throwable]) =>
-                    /** 调用回调函数 raiseError 总是返回一个包含一个 Throwable 的 Success */
-                    callback(Left(new RuntimeException(s"[${Thread.currentThread.getName}] Async callback : 在 Future 线程中发现 io.raiseError")))
-                case Failure(e) =>
-                    // 调用回调函数（如果 Future 直接 throw Exception, 则会得到 Failure，否则不会到达这里）
-                    callback(Left(new RuntimeException(s"[${Thread.currentThread.getName}] Async callback : 在 Future 线程中发现 Failure - ${e.getMessage}")))
+                case Success(a:String) => register { /** 注册回调函数 */
+                    Right(s"[${Thread.currentThread.getName}] Async callback : 在 Future 线程中发现 Success - $a".asInstanceOf[A])
+                }
+                case Success(x:IO[Throwable]) =>register( /** 注册回调函数 raiseError 总是返回一个包含一个 Throwable 的 Success */
+                    Left(new RuntimeException(s"[${Thread.currentThread.getName}] Async callback : 在 Future 线程中发现 io.raiseError"))
+                )
+                case Failure(e) =>register( /** 注册回调函数（如果 Future 直接 throw Exception, 则会得到 Failure，否则不会到达这里）*/
+                    Left(new RuntimeException(s"[${Thread.currentThread.getName}] Async callback : 在 Future 线程中发现 Failure - ${e.getMessage}"))
+                )
             }
         }}
 
         /**
-          * 处理结果：Option 1)
-          *
-          * 和前例一样可以通过 unsafeRunSync 或 attempt.unsafeRunSync 在主线程中获得结果。
+          * 也可以通过 unsafeRunSync 或 attempt.unsafeRunSync 在主线程中获得结果。
           *
           * 植入了回调的 IO[Future] 在执行 unsafeRunSync 时，会等待直到回调任务完成，因此不需要显式使用 Await 来等待。
           * */
-        val aIO = asyncIO {
+        val msg: String = asyncIO {
             Future{ s"[${Thread.currentThread.getName}] Future: abc" }
-        }
+        }.unsafeRunSync()
+        /**
+          * unsafeRunSync 提供一个缺省的 callback 将 Either[Throwable, A] => A，在这里 A == String
+          * 所以会得到 String。
+          * */
+        println(s"[${Thread.currentThread.getName}] aIO.unsafeRunSync : " + msg)
 
-        // 可直接获得 Future 的结果无需 Await。
-        println(s"[${Thread.currentThread.getName}] aIO.unsafeRunSync : " + aIO.unsafeRunSync())
-        println(s"[${Thread.currentThread.getName}] aIO.unsafeRunSync : " + aIO.unsafeRunSync())
 
         /**
-          *　同样 unsafeRunSync 并不安全，attempt.unsafeRunSync 尝试在主线程中获得 async 中定义的 Either，然后进行处理。
+          *　unsafeRunSync 不安全，attempt.unsafeRunSync 尝试在主线程中获得 async 中定义的 Either，然后进行处理。
           * （如果没有使用 async 定制 Either 则同上例）
           * */
         asyncIO {
@@ -247,6 +252,174 @@ package Example_21_Effect_IO {
             case Left(l) =>
                 println(s"[${Thread.currentThread.getName}] aIO.unsafeRunAsync : " + l.getMessage)
         }
+
+        // 主线程适当等待 Async 完成。
+        Thread.sleep(1000)
+    }
+
+
+    object io_async_future extends App {
+        implicit val ec = concurrent.ExecutionContext.global
+
+        /**
+          * IO.async 为 Future 提供一个接口。如下例所示：
+          *
+          * 接口提供了一个回调函数注册机。
+          * */
+        def asyncIO[A](f: Future[A]): IO[A] = IO.async_ { register: (Either[Throwable, A] => Unit) => {
+            println(s"[${Thread.currentThread.getName}] Async callback is running")
+
+            /**
+              * 利用 onComplete 来呼叫回调函数。（onComplete 本身并不是回调。）
+              * */
+            f.onComplete {
+                case Success(a: String) => register {
+                    /** 注册回调函数 */
+                    Right(s"[${Thread.currentThread.getName}] Async callback : 在 Future 线程中发现 Success - $a".asInstanceOf[A])
+                }
+                case Success(x: IO[Throwable]) => register(/** 注册回调函数 raiseError 总是返回一个包含一个 Throwable 的 Success */
+                    Left(new RuntimeException(s"[${Thread.currentThread.getName}] Async callback : 在 Future 线程中发现 io.raiseError"))
+                )
+                case Failure(e) => register(/** 注册回调函数（如果 Future 直接 throw Exception, 则会得到 Failure，否则不会到达这里） */
+                    Left(new RuntimeException(s"[${Thread.currentThread.getName}] Async callback : 在 Future 线程中发现 Failure - ${e.getMessage}"))
+                )
+            }
+        }
+        }
+
+        /**
+          * 用 unsafeRunAsync 对回调内容进行进行处理.
+          * */
+        asyncIO {
+            Future(IO raiseError new RuntimeException(s"[${Thread.currentThread.getName}] Async callback: Boom..."))
+            //Future("Good!")
+        }.unsafeRunAsync {
+            // Provide callback
+            case Right(r) =>
+                println(s"[${Thread.currentThread.getName}] aIO.unsafeRunAsync : " + r)
+            case Left(l) =>
+                println(s"[${Thread.currentThread.getName}] aIO.unsafeRunAsync : " + l.getMessage)
+        }
+
+        /**
+          * 也可以通过 unsafeRunSync 或 attempt.unsafeRunSync 在主线程中获得结果。
+          *
+          * 植入了回调的 IO[Future] 在执行 unsafeRunSync 时，会等待直到回调任务完成，因此不需要显式使用 Await 来等待。
+          * */
+        val msg: String = asyncIO {
+            Future {
+                s"[${Thread.currentThread.getName}] Future: abc"
+            }
+        }.unsafeRunSync()
+
+        /**
+          * unsafeRunSync 提供一个缺省的 callback 将 Either[Throwable, A] => A，在这里 A == String
+          * 所以会得到 String。
+          * */
+        println(s"[${Thread.currentThread.getName}] aIO.unsafeRunSync : " + msg)
+
+
+        /**
+          * 　同样 unsafeRunSync 并不安全，attempt.unsafeRunSync 尝试在主线程中获得 async 中定义的 Either，然后进行处理。
+          * （如果没有使用 async 定制 Either 则同上例）
+          * */
+        asyncIO {
+            /** 用 IO raiseError 代替 throw 可以避免 Future 返回 Eager　的 Failure, 以Lazy的 Success[IO[Throwable]] 取而代之 */
+            Future(
+                IO raiseError /*throw*/ new RuntimeException(s"[${Thread.currentThread.getName}] Async callback: Boom...")
+            )
+            //Future("Good!")
+        }.attempt.unsafeRunSync match { // 得到由 async 定制的 Either
+            case Right(r) =>
+                println(s"[${Thread.currentThread.getName}] aIO.attempt.unsafeRunSync : " + r)
+            case Left(l) =>
+                println(s"[${Thread.currentThread.getName}] aIO.attempt.unsafeRunSync : " + l.getMessage)
+        }
+
+        /**
+          * Option 2）由于我们在 onComplete 中, 已经将异常"通知" 给了回调，因此我们也可以避免在主线程中处理异常,而转而利用
+          * 在 Future 线程中 用 unsafeRunAsync 对回调内容进行进行处理.
+          * */
+        asyncIO {
+            Future(IO raiseError /*throw*/ new RuntimeException(s"[${Thread.currentThread.getName}] Async callback: Boom..."))
+            //Future("Good!")
+        }.unsafeRunAsync {
+            /** unsafeRunAsync 可以接受 async 返回的数据并进一步处理。（也发生在相同的线程空间。） */
+            case Right(r) =>
+                println(s"[${Thread.currentThread.getName}] aIO.unsafeRunAsync : " + r)
+            case Left(l) =>
+                println(s"[${Thread.currentThread.getName}] aIO.unsafeRunAsync : " + l.getMessage)
+        }
+
+        // 主线程适当等待 Async 完成。
+        Thread.sleep(1000)
+    }
+
+    object io_async_event extends App {
+        implicit val ec = concurrent.ExecutionContext.global
+
+        trait ControlEvents {
+            def onEvent1(): IO[Unit]
+
+            def onEvent2(msg: String): IO[Unit]
+
+            def onError(t: Throwable): IO[Unit]
+        }
+
+        class Server() {
+            var controlEvents: ControlEvents = _
+
+            def setControlEvent(controlEvents: ControlEvents) = {
+                this.controlEvents = controlEvents
+            }
+        }
+
+        // ADT
+        sealed trait Event
+
+        final case class OnEvent1(run: () => Unit) extends Event
+
+        final case class OnEvent2(run: String => Unit) extends Event
+
+        final case class OnError(run: Throwable => Unit) extends Event
+
+        /**
+          * IO.async 为 Future 提供一个接口。如下例所示：
+          *
+          * 接口提供了一个回调函数注册机。
+          * */
+        def setCallback(server: Server): IO[Unit] = IO {
+            server.setControlEvent(new ControlEvents {
+                // Effect async
+                override def onEvent1(): IO[Unit] = IO.async_[Unit] { register =>
+                    register {
+                        Right(OnEvent1(() => {
+                            println("Event 1")
+                        }).run())
+                    }
+                }
+
+                override def onEvent2(msg: String): IO[Unit] = IO.async_[Unit] { register =>
+                    register {
+                        Right(OnEvent2(_msg => println(_msg)).run(msg))
+                    }
+                }
+
+                override def onError(t: Throwable): IO[Unit] = IO.async_[Unit] { register =>
+                    register {
+                        Right(OnError(_t => _t.printStackTrace()).run(t))
+                    }
+                }
+            })
+        }
+
+        (for {
+            server <- IO(new Server)
+            _ <- setCallback(server)
+            _ <- server.controlEvents.onEvent1()
+            _ <- server.controlEvents.onEvent2("Event 2")
+        } yield server).map { s =>
+        }.unsafeRunSync()
 
         // 主线程适当等待 Async 完成。
         Thread.sleep(1000)
